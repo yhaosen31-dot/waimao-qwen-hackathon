@@ -43,7 +43,7 @@ const navItems = [
     match: (pathname: string) => pathname.startsWith("/runs/") && pathname !== "/runs/new"
   },
   {
-    href: "/imports/new",
+    href: "/imports",
     label: "Excel 导入",
     icon: Upload,
     match: (pathname: string) => pathname.startsWith("/imports")
@@ -94,6 +94,10 @@ const pageTitles: Array<{ match: (pathname: string) => boolean; title: string }>
   {
     match: (pathname) => pathname.startsWith("/runs/"),
     title: "任务运行 / LangGraph 控制台"
+  },
+  {
+    match: (pathname) => pathname === "/imports",
+    title: "Excel 导入任务"
   },
   {
     match: (pathname) => pathname === "/imports/new",

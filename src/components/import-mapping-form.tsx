@@ -118,7 +118,7 @@ export function ImportMappingForm({
 
   async function confirmImport() {
     setIsConfirming(true);
-    setMessage(null);
+    setMessage("正在保存候选客户到 CRM，请稍等。");
 
     const response = await fetch(`/api/imports/${importJobId}/confirm`, {
       method: "POST"
@@ -135,27 +135,7 @@ export function ImportMappingForm({
       return;
     }
 
-    setMessage(`已保存 ${payload.imported ?? importedCount} 个候选客户。`);
-    router.refresh();
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async function startEnrichment() {
-    setIsStartingEnrichment(true);
-    setMessage(null);
-
-    const response = await fetch(`/api/imports/${importJobId}/enrich`, {
-      method: "POST"
-    });
-    const payload = (await response.json()) as {
-      message?: string;
-      error?: string;
-      stats?: typeof enrichmentStats;
-    };
-
-    setIsStartingEnrichment(false);
-    if (payload.stats) setEnrichmentStats(payload.stats);
-    setMessage(payload.message ?? payload.error ?? "补全流程已准备。");
+    setMessage(`已保存 ${payload.imported ?? importedCount} 个候选客户。下一步可以开始补全官网和联系方式。`);
     router.refresh();
   }
 
@@ -258,29 +238,9 @@ export function ImportMappingForm({
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async function scoreBuyerFit() {
-    setIsScoringBuyerFit(true);
-    setMessage(null);
-
-    const response = await fetch(`/api/imports/${importJobId}/score-buyer-fit`, {
-      method: "POST"
-    });
-    const payload = (await response.json()) as {
-      message?: string;
-      error?: string;
-      stats?: typeof buyerFitStats;
-    };
-
-    setIsScoringBuyerFit(false);
-    if (payload.stats) setBuyerFitStats(payload.stats);
-    setMessage(payload.message ?? payload.error ?? "客户匹配评分已完成。");
-    router.refresh();
-  }
-
   async function scoreBuyerFitBatched() {
     setIsScoringBuyerFit(true);
-    setMessage(null);
+    setMessage("正在启动 Buyer Fit 评分。开启队列时可离开当前页面。");
 
     try {
       for (let batchIndex = 0; batchIndex < 100; batchIndex += 1) {
@@ -301,18 +261,18 @@ export function ImportMappingForm({
         };
 
         if (response.ok && payload.queued) {
-          setMessage(payload.message ?? "客户匹配评分已进入后台队列，正在打开任务进度页。");
+          setMessage(payload.message ?? "Buyer Fit 评分已进入后台队列，正在打开任务进度页。");
           if (payload.runId) router.push(`/runs/${payload.runId}`);
           break;
         }
 
         if (!response.ok || !payload.stats) {
-          setMessage(payload.error ?? "客户匹配评分失败，请稍后重试。");
+          setMessage(payload.error ?? "Buyer Fit 评分失败，请稍后重试。");
           break;
         }
 
         setBuyerFitStats(payload.stats);
-        setMessage(`客户匹配评分已完成 ${payload.stats.scored}/${payload.stats.total}，剩余 ${payload.stats.remaining} 个。`);
+        setMessage(`Buyer Fit 评分已完成 ${payload.stats.scored}/${payload.stats.total}，剩余 ${payload.stats.remaining} 个。`);
         router.refresh();
 
         if (payload.stats.remaining <= 0 || payload.stats.processed === 0) break;
@@ -324,7 +284,7 @@ export function ImportMappingForm({
 
   async function generateEmailDrafts() {
     setIsGeneratingEmails(true);
-    setMessage(null);
+    setMessage("正在生成开发信草稿。草稿会进入人工审核，不会自动发送。");
 
     const response = await fetch(`/api/imports/${importJobId}/generate-email-drafts`, {
       method: "POST"
@@ -463,7 +423,7 @@ export function ImportMappingForm({
           ) : (
             <Star className="h-4 w-4" />
           )}
-          开始客户匹配评分
+          开始 Buyer Fit 评分
         </Button>
         <Button
           disabled={isGeneratingEmails || status !== "imported"}
@@ -505,7 +465,7 @@ export function ImportMappingForm({
         <div className="grid gap-2 rounded-md border bg-slate-50 p-3 text-sm text-slate-700 md:grid-cols-4">
           <div>总数：{buyerFitStats.total}</div>
           <div>剩余：{buyerFitStats.remaining}</div>
-          <div>待评分：{buyerFitStats.processed}</div>
+          <div>本次处理：{buyerFitStats.processed}</div>
           <div>已评分：{buyerFitStats.scored}</div>
           <div>失败：{buyerFitStats.failed}</div>
           <div>High：{buyerFitStats.high}</div>

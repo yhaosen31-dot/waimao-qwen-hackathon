@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, Clock, FileText, Mail, ServerCog, SkipForward, Users } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, FileText, Mail, ServerCog, SkipForward, Users } from "lucide-react";
 import { EmailDraftReviewForm } from "@/components/email-draft-review-form";
 import { ForceEmailDraftButton } from "@/components/force-email-draft-button";
 import { KeywordApprovalForm } from "@/components/keyword-approval-form";
@@ -45,10 +45,14 @@ export default async function RunDetailPage({ params }: Params) {
   const providerPriority = Array.isArray(results.run.metadata?.providerPriority)
     ? results.run.metadata.providerPriority.join(", ")
     : "exa";
+  const importJobId =
+    typeof results.run.metadata?.importJobId === "string" ? results.run.metadata.importJobId : undefined;
   const queueStatus =
     typeof results.run.metadata?.queueStatus === "string" ? results.run.metadata.queueStatus : undefined;
   const queueJobId =
     typeof results.run.metadata?.queueJobId === "string" ? results.run.metadata.queueJobId : undefined;
+  const queueError =
+    typeof results.run.metadata?.queueError === "string" ? results.run.metadata.queueError : undefined;
   const currentQueueStep =
     typeof results.run.metadata?.currentQueueStep === "string"
       ? results.run.metadata.currentQueueStep
@@ -79,6 +83,9 @@ export default async function RunDetailPage({ params }: Params) {
     results.emailDrafts.filter((draft) => draft.status !== "skipped").map((draft) => draft.companyId)
   );
   const forceDraftCandidates = results.companies.filter((company) => !activeDraftCompanyIds.has(company.id));
+  const failedSteps = results.runSteps.filter((step) => step.status === "failed");
+  const failedCompanies = results.companies.filter((company) => company.enrichmentStatus === "failed");
+  const failedDrafts = results.emailDrafts.filter((draft) => draft.status === "failed");
   const emailByCompanyId = new Map<string, string>();
   for (const email of results.emailAddresses) {
     if (!emailByCompanyId.has(email.companyId)) emailByCompanyId.set(email.companyId, email.email);
@@ -100,6 +107,11 @@ export default async function RunDetailPage({ params }: Params) {
           <Badge variant={displayStatus === "completed" ? "success" : "warning"}>
             {displayStatus}
           </Badge>
+          {importJobId ? (
+            <Button asChild variant="outline">
+              <Link href={`/imports/${importJobId}`}>打开导入批次</Link>
+            </Button>
+          ) : null}
           <Button asChild variant="outline">
             <Link href="/reviews">Reviews</Link>
           </Button>
@@ -130,6 +142,71 @@ export default async function RunDetailPage({ params }: Params) {
           <StatCard icon={ServerCog} label="Queue job" value={queueJobId ?? "-"} />
           <StatCard icon={ServerCog} label="Current queue step" value={currentQueueStep ?? "-"} />
         </div>
+      ) : null}
+
+      {displayStatus === "failed" || queueError || failedSteps.length > 0 || failedCompanies.length > 0 || failedDrafts.length > 0 ? (
+        <Card className="border-amber-200 bg-amber-50/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="h-5 w-5" />
+              失败原因与可重试项
+            </CardTitle>
+            <CardDescription>
+              后台任务失败时，先看这里的错误原因。Excel 导入批次可回到对应导入详情页重试失败客户。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            {queueError ? (
+              <div className="rounded-md border border-amber-200 bg-white p-3">
+                <div className="font-medium text-amber-800">Worker 错误</div>
+                <div className="mt-1 break-words text-slate-700">{queueError}</div>
+              </div>
+            ) : null}
+            {failedSteps.length > 0 ? (
+              <div className="rounded-md border border-amber-200 bg-white p-3">
+                <div className="font-medium text-amber-800">失败节点</div>
+                <div className="mt-2 space-y-2">
+                  {failedSteps.map((step) => (
+                    <div key={step.id}>
+                      <span className="font-medium">{step.label}</span>
+                      <span className="text-muted-foreground">：{step.errorMessage ?? step.summary ?? "未记录具体错误"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {failedCompanies.length > 0 ? (
+              <div className="rounded-md border border-amber-200 bg-white p-3">
+                <div className="font-medium text-amber-800">补全失败客户</div>
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  {failedCompanies.slice(0, 10).map((company) => (
+                    <Link className="text-primary" href={`/companies/${company.id}`} key={company.id}>
+                      {company.name}
+                    </Link>
+                  ))}
+                </div>
+                {failedCompanies.length > 10 ? (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    还有 {failedCompanies.length - 10} 个失败客户，请到客户列表按补全状态筛选。
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {failedDrafts.length > 0 ? (
+              <div className="rounded-md border border-amber-200 bg-white p-3">
+                <div className="font-medium text-amber-800">邮件草稿失败</div>
+                <div className="mt-2 space-y-2">
+                  {failedDrafts.slice(0, 10).map((draft) => (
+                    <div key={draft.id}>
+                      <span className="font-medium">{draft.toEmail ?? draft.companyId}</span>
+                      <span className="text-muted-foreground">：{draft.errorMessage ?? "未记录具体错误"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">

@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, FileSpreadsheet, Rows3, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileSpreadsheet, Rows3, Users } from "lucide-react";
 import { ImportMappingForm } from "@/components/import-mapping-form";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,11 @@ export default async function ImportDetailPage({ params }: Props) {
   const headers = extractHeadersFromRows(rows);
   const previewRows = rows.slice(0, 20);
   const buyerFitSummary = getBuyerFitSummary(companies);
+  const failedCompanies = companies.filter((company) => company.enrichmentStatus === "failed");
+  const pendingEnrichmentCompanies = companies.filter((company) =>
+    !company.enrichmentStatus || company.enrichmentStatus === "pending"
+  );
+  const unscoredCompanies = companies.filter((company) => !company.buyerFitTier);
 
   return (
     <div className="space-y-6">
@@ -49,8 +54,13 @@ export default async function ImportDetailPage({ params }: Props) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
-            <Link href="/imports/new">
+            <Link href="/imports">
               <ArrowLeft className="h-4 w-4" />
+              导入任务列表
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/imports/new">
               新建导入
             </Link>
           </Button>
@@ -94,8 +104,10 @@ export default async function ImportDetailPage({ params }: Props) {
 
       <Card>
         <CardHeader>
-          <CardTitle>字段映射</CardTitle>
-          <CardDescription>自动识别结果可手动调整，保存后会重新计算清洗和去重统计。</CardDescription>
+          <CardTitle>字段映射与后续操作</CardTitle>
+          <CardDescription>
+            先确认导入；确认后可以随时回到本页继续补全官网和联系方式、Buyer Fit 评分、生成开发信草稿。
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <ImportMappingForm
@@ -107,6 +119,84 @@ export default async function ImportDetailPage({ params }: Props) {
           />
         </CardContent>
       </Card>
+
+      {failedCompanies.length > 0 || pendingEnrichmentCompanies.length > 0 || unscoredCompanies.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>待处理与失败明细</CardTitle>
+            <CardDescription>
+              如果任务中途离开页面，从左侧“Excel 导入”打开本批次，然后用上方按钮继续处理或重试。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-3 md:grid-cols-3">
+              <StatusHint
+                count={pendingEnrichmentCompanies.length}
+                label="未补全联系方式"
+                message="点击上方“开始补全官网和联系方式”。"
+              />
+              <StatusHint
+                count={unscoredCompanies.length}
+                label="未做 Buyer Fit 评分"
+                message="补全后点击上方“开始 Buyer Fit 评分”。"
+              />
+              <StatusHint
+                count={failedCompanies.length}
+                label="补全失败"
+                message="点击上方“只重试失败客户”。"
+              />
+            </div>
+
+            {failedCompanies.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+                  <AlertTriangle className="h-4 w-4" />
+                  失败客户原因
+                </div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>公司</TableHead>
+                        <TableHead>国家</TableHead>
+                        <TableHead>失败原因</TableHead>
+                        <TableHead>最后更新时间</TableHead>
+                        <TableHead>操作</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {failedCompanies.slice(0, 30).map((company) => (
+                        <TableRow key={company.id}>
+                          <TableCell className="min-w-[220px] font-medium">
+                            <Link className="text-primary" href={`/companies/${company.id}`}>
+                              {company.name}
+                            </Link>
+                          </TableCell>
+                          <TableCell>{company.country ?? "-"}</TableCell>
+                          <TableCell className="min-w-[300px]">
+                            {latestFailedLogMessage(company) ?? "补全过程失败，建议重试或人工查看证据。"}
+                          </TableCell>
+                          <TableCell>{formatDateTime(company.updatedAt)}</TableCell>
+                          <TableCell>
+                            <Button asChild size="sm" variant="outline">
+                              <Link href={`/companies/${company.id}`}>查看客户</Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {failedCompanies.length > 30 ? (
+                  <p className="text-xs text-muted-foreground">
+                    这里只显示前 30 个失败客户，更多客户可在客户列表按“补全状态=failed”筛选。
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -181,4 +271,28 @@ function getEnrichmentSummary(companies: Company[]) {
     websiteFound: companies.filter((company) => company.websiteStatus === "found").length,
     websiteNotFound: companies.filter((company) => company.websiteStatus === "not_found").length
   };
+}
+
+function StatusHint({
+  count,
+  label,
+  message
+}: {
+  count: number;
+  label: string;
+  message: string;
+}) {
+  return (
+    <div className="rounded-md border bg-slate-50 p-3">
+      <div className="text-2xl font-semibold">{count}</div>
+      <div className="mt-1 text-sm font-medium">{label}</div>
+      <div className="mt-1 text-xs leading-5 text-muted-foreground">{message}</div>
+    </div>
+  );
+}
+
+function latestFailedLogMessage(company: Company) {
+  return [...(company.enrichmentLogs ?? [])]
+    .reverse()
+    .find((log) => log.status === "failed")?.message;
 }
