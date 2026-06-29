@@ -18,6 +18,7 @@ import type {
   Evidence,
   ImportJob,
   ImportRow,
+  ImportRowStatus,
   Keyword,
   LocalJsonDatabase,
   PhoneNumber,
@@ -400,6 +401,37 @@ export async function saveImportRows(importJobId: EntityId, input: SaveImportRow
   );
   invalidateReadStoreCache();
   return rows;
+}
+
+export async function updateImportRowsStatus(
+  importJobId: EntityId,
+  rowIds: EntityId[],
+  status: ImportRowStatus
+) {
+  if (rowIds.length === 0) return [];
+  const organizationId = await ensureDefaultOrganization();
+  const importJob = await selectRowByLegacyId("import_jobs", organizationId, importJobId);
+  if (!importJob) throw new Error(`Import job not found: ${importJobId}`);
+
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from("import_rows")
+    .update({
+      status,
+      updated_at: now()
+    })
+    .eq("organization_id", organizationId)
+    .eq("import_job_id", stringValue(importJob.id))
+    .in("legacy_id", rowIds)
+    .select("*");
+
+  if (error) throw new Error(`Supabase update import_rows status failed: ${error.message}`);
+  invalidateReadStoreCache();
+
+  const importJobIdByUuid = reverseMap([importJob]);
+  return ((data ?? []) as Row[])
+    .map((row) => rowToImportRow(row, importJobIdByUuid))
+    .sort((a, b) => a.rowIndex - b.rowIndex);
 }
 
 export async function getImportRows(importJobId: EntityId) {

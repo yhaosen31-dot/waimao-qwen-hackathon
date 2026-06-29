@@ -21,6 +21,7 @@ import type {
   Evidence,
   ImportJob,
   ImportRow,
+  ImportRowStatus,
   Keyword,
   LocalJsonDatabase,
   PhoneNumber,
@@ -190,6 +191,37 @@ export async function saveImportRows(
   });
 
   return rows;
+}
+
+export async function updateImportRowsStatus(
+  importJobId: EntityId,
+  rowIds: EntityId[],
+  status: ImportRowStatus
+): Promise<ImportRow[]> {
+  if (rowIds.length === 0) return [];
+  const db = await readStore();
+  assertImportJobExists(db, importJobId);
+
+  const rowIdSet = new Set(rowIds);
+  const timestamp = now();
+  const updatedRows: ImportRow[] = [];
+  const importRows = db.importRows.map((row) => {
+    if (row.importJobId !== importJobId || !rowIdSet.has(row.id)) return row;
+    const updatedRow = {
+      ...row,
+      status,
+      updatedAt: timestamp
+    };
+    updatedRows.push(updatedRow);
+    return updatedRow;
+  });
+
+  await writeStore({
+    ...db,
+    importRows
+  });
+
+  return updatedRows.sort((a, b) => a.rowIndex - b.rowIndex);
 }
 
 export async function getImportRows(importJobId: EntityId) {

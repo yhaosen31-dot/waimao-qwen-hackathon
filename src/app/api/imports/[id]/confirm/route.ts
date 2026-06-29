@@ -6,8 +6,8 @@ import {
   getImportJobResults,
   saveCompanies,
   saveEvidence,
-  saveImportRows,
   updateImportJob,
+  updateImportRowsStatus,
   updateRun,
   updateRunStep
 } from "@/repositories/store";
@@ -65,26 +65,28 @@ export async function POST(_request: Request, context: Context) {
     }
   });
 
-  await updateRunStep(run.id, "normalizeInput", {
-    status: "completed",
-    summary: `Parsed ${results.importJob.totalRows} uploaded rows.`
-  });
-  await updateRunStep(run.id, "generateKeywords", {
-    status: "skipped",
-    summary: "Excel import does not generate product keywords in this stage."
-  });
-  await updateRunStep(run.id, "humanApproveKeywords", {
-    status: "skipped",
-    summary: "Keyword review is skipped for Excel import."
-  });
-  await updateRunStep(run.id, "searchCustomersByProduct", {
-    status: "skipped",
-    summary: "Product search is skipped; uploaded rows are the source."
-  });
-  await updateRunStep(run.id, "extractCompanyDetails", {
-    status: "completed",
-    summary: `Saved ${candidateRows.length} deduped companies as imported candidates.`
-  });
+  await Promise.all([
+    updateRunStep(run.id, "normalizeInput", {
+      status: "completed",
+      summary: `Parsed ${results.importJob.totalRows} uploaded rows.`
+    }),
+    updateRunStep(run.id, "generateKeywords", {
+      status: "skipped",
+      summary: "Excel import does not generate product keywords in this stage."
+    }),
+    updateRunStep(run.id, "humanApproveKeywords", {
+      status: "skipped",
+      summary: "Keyword review is skipped for Excel import."
+    }),
+    updateRunStep(run.id, "searchCustomersByProduct", {
+      status: "skipped",
+      summary: "Product search is skipped; uploaded rows are the source."
+    }),
+    updateRunStep(run.id, "extractCompanyDetails", {
+      status: "completed",
+      summary: `Saved ${candidateRows.length} deduped companies as imported candidates.`
+    })
+  ]);
 
   const companyIdsByRowId = new Map(candidateRows.map((row) => [row.id, `company_${nanoid(10)}`]));
   const evidenceIdsByRowId = new Map(
@@ -134,23 +136,24 @@ export async function POST(_request: Request, context: Context) {
   }));
 
   const companies = await saveCompanies(run.id, companyInputs);
-  await saveEvidence(run.id, evidenceInputs);
-  await saveImportRows(
-    id,
-    results.rows.map((row) =>
-      candidateRows.some((candidate) => candidate.id === row.id)
-        ? { ...row, status: "imported" }
-        : row
+  await Promise.all([
+    saveEvidence(run.id, evidenceInputs),
+    updateImportRowsStatus(
+      id,
+      candidateRows.map((row) => row.id),
+      "imported"
     )
-  );
-  await updateImportJob(id, {
-    status: "imported",
-    runId: run.id
-  });
-  await updateRun(run.id, {
-    status: "completed",
-    currentStep: "extractCompanyDetails"
-  });
+  ]);
+  await Promise.all([
+    updateImportJob(id, {
+      status: "imported",
+      runId: run.id
+    }),
+    updateRun(run.id, {
+      status: "completed",
+      currentStep: "extractCompanyDetails"
+    })
+  ]);
 
   return NextResponse.json({
     ok: true,

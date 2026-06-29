@@ -9,6 +9,7 @@ import type {
   EmailDraft,
   EntityId,
   ImportJob,
+  ImportRowStatus,
   Run,
   RunStep,
   SaveCompanyInput,
@@ -81,6 +82,14 @@ export async function getImportJob(importJobId: EntityId) {
 
 export async function saveImportRows(importJobId: EntityId, input: SaveImportRowInput[]) {
   return activeStore().saveImportRows(importJobId, input);
+}
+
+export async function updateImportRowsStatus(
+  importJobId: EntityId,
+  rowIds: EntityId[],
+  status: ImportRowStatus
+) {
+  return activeStore().updateImportRowsStatus(importJobId, rowIds, status);
 }
 
 export async function getImportRows(importJobId: EntityId) {
