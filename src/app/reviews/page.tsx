@@ -1,15 +1,17 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { CheckCircle2, FileText, KeyRound, Mail } from "lucide-react";
+import { EmailDraftActionPanel } from "@/components/email-draft-action-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { readStore } from "@/lib/store";
+import { emailStatusLabels, labelValue } from "@/lib/crm-labels";
+import { readReviewStore } from "@/repositories/store";
 import { formatDateTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReviewsPage() {
-  const db = await readStore();
+  const db = await readReviewStore();
   const keywordRunIds = new Set(
     db.runSteps
       .filter((step) => step.stepKey === "humanApproveKeywords" && step.status === "waiting_review")
@@ -25,6 +27,10 @@ export default async function ReviewsPage() {
   const completedRuns = db.runs.filter(
     (run) => run.keywordReviewStatus === "approved" && run.emailReviewStatus === "approved"
   );
+  const waitingDrafts = db.emailDrafts.filter((draft) => draft.status === "waiting_review");
+  const draftDrafts = db.emailDrafts.filter((draft) => draft.status === "draft");
+  const approvedEmailDrafts = db.emailDrafts.filter((draft) => draft.status === "approved");
+  const skippedEmailDrafts = db.emailDrafts.filter((draft) => draft.status === "skipped");
 
   return (
     <div className="space-y-6">
@@ -58,6 +64,10 @@ export default async function ReviewsPage() {
         runs={completedRuns}
         title="已完成审核任务"
       />
+      <EmailQueueSection db={db} drafts={waitingDrafts} title="waiting_review 邮件" />
+      <EmailQueueSection db={db} drafts={draftDrafts} title="draft 邮件" />
+      <EmailQueueSection db={db} drafts={approvedEmailDrafts} title="approved 邮件" />
+      <EmailQueueSection db={db} drafts={skippedEmailDrafts} title="skipped 邮件" />
     </div>
   );
 }
@@ -113,6 +123,56 @@ function ReviewSection({
               </Link>
             ))}
           </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmailQueueSection({
+  db,
+  drafts,
+  title
+}: {
+  db: Awaited<ReturnType<typeof readReviewStore>>;
+  drafts: Awaited<ReturnType<typeof readReviewStore>>["emailDrafts"];
+  title: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Mail className="h-5 w-5 text-blue-600" />
+          <CardTitle>{title}</CardTitle>
+        </div>
+        <CardDescription>可编辑、保存草稿、批准、跳过或重新生成；不会真实发送。</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {drafts.length === 0 ? (
+          <div className="rounded-md border border-dashed p-5 text-sm text-muted-foreground">
+            暂无邮件
+          </div>
+        ) : (
+          drafts.map((draft) => {
+            const company = db.companies.find((item) => item.id === draft.companyId);
+
+            return (
+              <div className="rounded-md border p-4" key={draft.id}>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-medium">{company?.name ?? draft.companyId}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {draft.toEmail ?? "无邮箱"} / 线索分 {company?.leadScore ?? "-"}
+                    </div>
+                  </div>
+                  <Badge variant={draft.status === "approved" ? "success" : "outline"}>
+                    {labelValue(draft.status, emailStatusLabels)}
+                  </Badge>
+                </div>
+                <EmailDraftActionPanel compact draft={draft} />
+              </div>
+            );
+          })
         )}
       </CardContent>
     </Card>

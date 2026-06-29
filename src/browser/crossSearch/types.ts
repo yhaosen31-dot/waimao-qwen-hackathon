@@ -1,3 +1,4 @@
+// Disabled legacy connector: retained for reference only. Current providers and APIs must not import or run this module.
 export interface CrossSearchConfig {
   baseUrl: string;
   oneSearchUrl: string;

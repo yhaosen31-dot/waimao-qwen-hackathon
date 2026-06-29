@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import {
   ArrowRight,
   BadgeCheck,
@@ -21,11 +21,12 @@ import {
   TrendingUp,
   Users
 } from "lucide-react";
+import { ExcelImportForm } from "@/components/excel-import-form";
 import { NewRunForm } from "@/components/new-run-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getRunResults, listCompanies, listRuns, readStore } from "@/lib/store";
+import { readCrmStore, readReviewStore } from "@/repositories/store";
 import { cn, formatDateTime } from "@/lib/utils";
 import type {
   Company,
@@ -33,6 +34,7 @@ import type {
   EmailDraft,
   Evidence,
   LeadGenerationStepKey,
+  LocalJsonDatabase,
   RunResults,
   RunStepStatus,
   WhatsappNumber
@@ -44,11 +46,12 @@ const workflowOrder: LeadGenerationStepKey[] = [
   "normalizeInput",
   "generateKeywords",
   "humanApproveKeywords",
-  "searchCrossBorderImporters",
+  "searchCustomersByProduct",
   "extractCompanyDetails",
+  "enrichCompanies",
   "discoverWebsite",
-  "searchEmailsByDomain",
-  "discoverWhatsappAndContacts",
+  "discoverContacts",
+  "mergeEvidence",
   "scoreBuyerFit",
   "generateEmailDraft",
   "humanApproveEmail",
@@ -60,22 +63,27 @@ const workflowLabels: Record<LeadGenerationStepKey, string> = {
   normalizeInput: "标准化输入",
   generateKeywords: "生成英文关键词",
   humanApproveKeywords: "人工确认关键词",
-  searchCrossBorderImporters: "跨境搜一键搜",
+  searchCustomersByProduct: "产品搜索获客",
   extractCompanyDetails: "提取企业详情",
+  enrichCompanies: "补全客户",
   discoverWebsite: "官网发现/确认",
-  searchEmailsByDomain: "外贸邮箱查询",
+  discoverContacts: "联系方式发现",
+  mergeEvidence: "证据融合",
+  searchEmailsByDomain: "公开邮箱搜索",
   discoverWhatsappAndContacts: "搜索 WhatsApp",
   scoreBuyerFit: "客户匹配评分",
   generateEmailDraft: "生成开发信草稿",
   humanApproveEmail: "人工确认邮件",
-  saveEmailDraft: "发送/保存",
+  saveEmailDraft: "草稿保存",
   saveToCrm: "入库 CRM"
 };
 
 export default async function NewRunPage() {
-  const [runs, allCompanies, db] = await Promise.all([listRuns(), listCompanies(), readStore()]);
+  const [reviewDb, db] = await Promise.all([readReviewStore(), readCrmStore()]);
+  const runs = [...reviewDb.runs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const allCompanies = [...db.companies].sort((a, b) => (b.buyerFitScore ?? 0) - (a.buyerFitScore ?? 0));
   const latestRun = runs[0];
-  const latestResults = latestRun ? await getRunResults(latestRun.id) : null;
+  const latestResults = latestRun ? buildRunResults(latestRun.id, reviewDb, db) : null;
   const companies =
     latestResults && latestResults.companies.length > 0
       ? latestResults.companies
@@ -111,6 +119,12 @@ export default async function NewRunPage() {
           <SectionTitle number="1" title="创建获客任务" />
           <div className="mt-5">
             <NewRunForm />
+          </div>
+          <div className="mt-6 border-t border-slate-100 pt-5">
+            <h3 className="text-sm font-semibold text-slate-800">Excel 导入获客</h3>
+            <div className="mt-4">
+              <ExcelImportForm />
+            </div>
           </div>
         </div>
 
@@ -176,11 +190,36 @@ export default async function NewRunPage() {
       {latestRun ? (
         <div className="text-xs text-slate-500">
           最近任务：{latestRun.normalizedProduct ?? latestRun.productInput} ·{" "}
-          {formatDateTime(latestRun.createdAt)} · 本页所有外部服务仍为 mock 模式
+          {formatDateTime(latestRun.createdAt)} · 外部搜索通过已配置的 SearchProviderRouter 执行
         </div>
       ) : null}
     </div>
   );
+}
+
+function buildRunResults(
+  runId: string,
+  reviewDb: LocalJsonDatabase,
+  crmDb: LocalJsonDatabase
+): RunResults | null {
+  const run = reviewDb.runs.find((item) => item.id === runId);
+  if (!run) return null;
+
+  return {
+    run,
+    runSteps: reviewDb.runSteps
+      .filter((step) => step.runId === runId)
+      .sort((a, b) => a.order - b.order),
+    keywords: reviewDb.keywords.filter((keyword) => keyword.runId === runId),
+    companies: crmDb.companies.filter((company) => company.runId === runId),
+    contacts: crmDb.contacts.filter((contact) => contact.runId === runId),
+    emailAddresses: crmDb.emailAddresses.filter((email) => email.runId === runId),
+    whatsappNumbers: crmDb.whatsappNumbers.filter((whatsapp) => whatsapp.runId === runId),
+    phoneNumbers: crmDb.phoneNumbers.filter((phone) => phone.runId === runId),
+    evidence: crmDb.evidence.filter((item) => item.runId === runId),
+    emailDrafts: crmDb.emailDrafts.filter((draft) => draft.runId === runId),
+    emailLogs: crmDb.emailLogs.filter((log) => log.runId === runId)
+  };
 }
 
 function SectionTitle({ number, title }: { number: string; title: string }) {
@@ -401,7 +440,7 @@ function CustomerTable({
         <Table2 className="h-4 w-4 text-slate-400" />
       </div>
       {companies.length === 0 ? (
-        <div className="p-8 text-sm text-slate-500">暂无客户。点击启动获客任务生成 mock 客户。</div>
+        <div className="p-8 text-sm text-slate-500">暂无客户。点击启动获客任务生成候选客户。</div>
       ) : (
         <>
           <Table>
@@ -485,7 +524,7 @@ function CustomerTable({
               <span>2</span>
               <span>3</span>
               <span>...</span>
-              <span>10 条/页</span>
+              <span>10 页</span>
             </div>
           </div>
         </>
@@ -515,7 +554,8 @@ function CompanyInsight({
     );
   }
 
-  const reasons = company.buyerFitReasons.length > 0 ? company.buyerFitReasons : ["产品关键词匹配", "存在公开联系信息"];
+  const reasons =
+    company.buyerFitReasons.length > 0 ? company.buyerFitReasons : ["产品关键词匹配", "存在公开联系信息"];
   const score = company.buyerFitScore ?? 0;
   const scoreLabel = score >= 85 ? "高匹配" : score >= 70 ? "中匹配" : "待确认";
 

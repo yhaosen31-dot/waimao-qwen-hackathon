@@ -1,10 +1,11 @@
 import {
   extractContactResults,
-  mockSearchResults,
+  resolveProviderEndpoint,
   type CompanyContactSearchInput,
   type CompanyWebsiteSearchInput,
   type SearchProviderMethods
 } from "@/providers/exaProvider";
+import { fetchWithTimeout } from "@/providers/providerFetch";
 import { envFlag, type ExternalProvider, type ProviderFactoryOptions } from "@/providers/types";
 import type { ContactSearchResult, SearchResult } from "@/types";
 
@@ -17,12 +18,15 @@ export function createTavilyProvider(options: ProviderFactoryOptions = {}): Tavi
   let lastError: string | undefined;
 
   async function runSearch(query: string, fallbackUrl?: string): Promise<SearchResult[]> {
+    void fallbackUrl;
+
     if (mode !== "real" || !isConfigured) {
-      return mockSearchResults("tavily", query, fallbackUrl);
+      lastError = "Tavily is not configured.";
+      return [];
     }
 
     try {
-      const response = await fetch("https://api.tavily.com/search", {
+      const response = await fetchWithTimeout(resolveProviderEndpoint(process.env.TAVILY_BASE_URL, "https://api.tavily.com", "search"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -63,7 +67,7 @@ export function createTavilyProvider(options: ProviderFactoryOptions = {}): Tavi
         }));
     } catch (error) {
       lastError = error instanceof Error ? error.message : "Unknown Tavily error";
-      return mockSearchResults("tavily", query, fallbackUrl, lastError);
+      return [];
     }
   }
 

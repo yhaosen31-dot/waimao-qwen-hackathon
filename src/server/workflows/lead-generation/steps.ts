@@ -4,7 +4,7 @@ export const workflowStepLabels: Record<WorkflowStepKey, string> = {
   normalize_input: "Standardize product input",
   generate_keywords: "Generate English keywords",
   human_confirm_keywords: "Human keyword review",
-  search_importers: "KJing-style importer search",
+  search_importers: "Product search lead discovery",
   extract_company_details: "Extract company details and websites",
   resolve_missing_websites: "Resolve missing websites",
   find_emails: "Find emails by domain",

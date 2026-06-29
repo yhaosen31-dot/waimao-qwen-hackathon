@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { applyEmailDraftDecisions } from "@/lib/review-service";
+import { writeRequestAuditLog } from "@/services/auditLogService";
+import { requireRateLimit } from "@/services/rateLimitService";
 
 export const runtime = "nodejs";
 
@@ -25,6 +27,17 @@ interface Params {
 }
 
 export async function POST(request: Request, { params }: Params) {
+  const rateLimited = await requireRateLimit(request, "review_action");
+  if (rateLimited) {
+    await writeRequestAuditLog(request, {
+      action: "review.email_decisions",
+      resourceType: "run",
+      status: "blocked",
+      metadata: { reason: "rate_limited" }
+    });
+    return rateLimited;
+  }
+
   const { runId } = await params;
   const payload = approveEmailSchema.parse(await request.json());
 
@@ -38,6 +51,16 @@ export async function POST(request: Request, { params }: Params) {
         action: draft.action
       }))
     );
+    await writeRequestAuditLog(request, {
+      action: "review.email_decisions",
+      resourceType: "run",
+      resourceId: runId,
+      status: "success",
+      metadata: {
+        draftCount: payload.drafts.length,
+        actions: payload.drafts.map((draft) => draft.action)
+      }
+    });
 
     return NextResponse.json({
       ok: true,
@@ -46,7 +69,19 @@ export async function POST(request: Request, { params }: Params) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Email review failed";
     const status = message.includes("not found") ? 404 : 400;
+    await writeRequestAuditLog(request, {
+      action: "review.email_decisions",
+      resourceType: "run",
+      resourceId: runId,
+      status: "failure",
+      metadata: {
+        draftCount: payload.drafts.length,
+        actions: payload.drafts.map((draft) => draft.action)
+      },
+      errorMessage: message
+    });
 
     return NextResponse.json({ error: message }, { status });
   }
 }
+

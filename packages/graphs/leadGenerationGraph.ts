@@ -11,7 +11,7 @@ export type LeadGenerationNodeName =
   | "normalizeInput"
   | "generateKeywords"
   | "humanApproveKeywords"
-  | "searchCrossBorderImporters"
+  | "searchCustomersByProduct"
   | "extractCompanyDetails"
   | "discoverWebsite"
   | "searchEmailsByDomain"
@@ -37,7 +37,7 @@ export interface ImporterLead {
   id: string;
   companyName: string;
   country: string;
-  source: "mock-cross-border-search";
+  source: "product-search-seed";
   matchedKeyword: string;
 }
 
@@ -118,7 +118,7 @@ export const leadGenerationNodeOrder: LeadGenerationNodeName[] = [
   "normalizeInput",
   "generateKeywords",
   "humanApproveKeywords",
-  "searchCrossBorderImporters",
+  "searchCustomersByProduct",
   "extractCompanyDetails",
   "discoverWebsite",
   "searchEmailsByDomain",
@@ -139,7 +139,7 @@ const nodeLabels: Record<LeadGenerationNodeName, string> = {
   normalizeInput: "Normalize product input",
   generateKeywords: "Generate English keywords",
   humanApproveKeywords: "Human approve keywords",
-  searchCrossBorderImporters: "Search cross-border importers",
+  searchCustomersByProduct: "Search customers by product",
   extractCompanyDetails: "Extract company details",
   discoverWebsite: "Discover website",
   searchEmailsByDomain: "Search emails by domain",
@@ -224,7 +224,7 @@ export function createLeadGenerationGraph(options: CreateLeadGenerationGraphOpti
     .addNode("normalizeInput", normalizeInput)
     .addNode("generateKeywords", generateKeywords)
     .addNode("humanApproveKeywords", humanApproveKeywords)
-    .addNode("searchCrossBorderImporters", searchCrossBorderImporters)
+    .addNode("searchCustomersByProduct", searchCustomersByProduct)
     .addNode("extractCompanyDetails", extractCompanyDetails)
     .addNode("discoverWebsite", discoverWebsite)
     .addNode("searchEmailsByDomain", searchEmailsByDomain)
@@ -237,8 +237,8 @@ export function createLeadGenerationGraph(options: CreateLeadGenerationGraphOpti
     .addEdge(START, "normalizeInput")
     .addEdge("normalizeInput", "generateKeywords")
     .addEdge("generateKeywords", "humanApproveKeywords")
-    .addEdge("humanApproveKeywords", "searchCrossBorderImporters")
-    .addEdge("searchCrossBorderImporters", "extractCompanyDetails")
+    .addEdge("humanApproveKeywords", "searchCustomersByProduct")
+    .addEdge("searchCustomersByProduct", "extractCompanyDetails")
     .addEdge("extractCompanyDetails", "discoverWebsite")
     .addEdge("discoverWebsite", "searchEmailsByDomain")
     .addEdge("searchEmailsByDomain", "discoverWhatsappAndContacts")
@@ -304,7 +304,7 @@ async function generateKeywords(state: GraphState) {
     product,
     "hydraulic accumulator",
     "diaphragm accumulator supplier",
-    "hydraulic accumulator importer",
+    "hydraulic accumulator distributor",
     "industrial hydraulic accumulator",
     "pressure accumulator for hydraulic system",
     "nitrogen charged diaphragm accumulator",
@@ -334,21 +334,21 @@ async function humanApproveKeywords(state: GraphState) {
   };
 }
 
-async function searchCrossBorderImporters(state: GraphState) {
+async function searchCustomersByProduct(state: GraphState) {
   const importers = Array.from({ length: state.targetCustomerCount }, (_, index) => ({
     id: `importer_${index + 1}`,
     companyName: mockCompanyName(index),
     country: mockCountry(index),
-    source: "mock-cross-border-search" as const,
-    matchedKeyword: state.keywords[index % Math.max(state.keywords.length, 1)] ?? "hydraulic accumulator importer"
+    source: "product-search-seed" as const,
+    matchedKeyword: state.keywords[index % Math.max(state.keywords.length, 1)] ?? "hydraulic accumulator distributor"
   }));
 
   return {
     importers,
     run_steps: completeStep(
       state.run_steps,
-      "searchCrossBorderImporters",
-      `Found ${importers.length} mock importers. No real cross-border search login was used.`
+      "searchCustomersByProduct",
+      `Found ${importers.length} product-search seed candidates. No cross-search automation was used.`
     )
   };
 }
@@ -422,7 +422,7 @@ async function searchEmailsByDomain(state: GraphState) {
     run_steps: completeStep(
       state.run_steps,
       "searchEmailsByDomain",
-      `Generated ${emailCandidates.length} mock emails. No real foreign-trade email lookup was used.`
+      `Generated ${emailCandidates.length} mock email patterns. No external email lookup was used.`
     )
   };
 }

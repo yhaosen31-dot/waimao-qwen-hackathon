@@ -18,11 +18,20 @@ export async function discoverWebsite(state: LeadGenerationGraphState) {
       const nextWebsite =
         hasHighConfidenceSingle || (bestWebsite && bestWebsite.confidence >= 0.86)
           ? bestWebsite.url
-          : company.website || `https://www.${company.domain}`;
+          : company.website;
+      const websiteStatus =
+        bestWebsite && !hasHighConfidenceSingle && bestWebsite.confidence < 0.86
+          ? ("needs_review" as const)
+          : nextWebsite
+            ? ("found" as const)
+            : ("not_found" as const);
 
       return {
         ...company,
         website: nextWebsite,
+        domain: nextWebsite ? domainFromWebsite(nextWebsite) : company.domain,
+        websiteStatus,
+        enrichmentStatus: websiteStatus === "needs_review" ? ("needs_review" as const) : company.enrichmentStatus,
         evidence: [
           ...company.evidence,
           ...aggregation.evidence.map((item) => ({
@@ -36,7 +45,20 @@ export async function discoverWebsite(state: LeadGenerationGraphState) {
             source: item.source,
             rawText: item.rawText,
             confidence: item.confidence
-          }))
+          })),
+          ...(bestWebsite || company.website
+            ? []
+            : [
+                {
+                  type: "website_not_found" as const,
+                  title: "Website not found",
+                  snippet:
+                    "No official website was found in SearchProviderRouter results; no synthetic website was generated.",
+                  source: "product_search",
+                  rawText: "",
+                  confidence: 0.2
+                }
+              ])
         ]
       };
     })
@@ -52,4 +74,8 @@ export async function discoverWebsite(state: LeadGenerationGraphState) {
     errors: [...state.errors, ...searchErrors],
     ...completed
   };
+}
+
+function domainFromWebsite(website: string) {
+  return website.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
 }

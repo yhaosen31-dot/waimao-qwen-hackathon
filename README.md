@@ -1,5 +1,13 @@
 # Waimao Agent Platform
 
+Production checklist:
+
+- [docs/production-deployment-checklist.md](docs/production-deployment-checklist.md)
+- [docs/internal-beta-deployment-guide.md](docs/internal-beta-deployment-guide.md)
+- [docs/railway-deployment-guide.md](docs/railway-deployment-guide.md)
+- [docs/tencent-cloud-deployment-guide.md](docs/tencent-cloud-deployment-guide.md)
+- [.env.production.example](.env.production.example)
+
 企业级 B2B 外贸获客 Agent 平台 MVP。
 
 当前版本以 mock-first 为主：先跑通 LangGraph.js 工作流、人工审核、CRM 结果沉淀和邮件草稿闭环；真实外部服务都封装在 provider 里，默认不消耗 API、不真实发信、不真实采集。

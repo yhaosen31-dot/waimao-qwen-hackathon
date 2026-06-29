@@ -51,7 +51,7 @@ export function CreateTaskForm() {
       <CardHeader>
         <CardTitle>Create lead generation task</CardTitle>
         <CardDescription>
-          Runs the complete LangGraph.js mock workflow and saves results to local JSON.
+          Runs the lead generation workflow and saves results to local JSON.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -79,7 +79,7 @@ export function CreateTaskForm() {
           <div className="flex items-end">
             <Button className="w-full md:w-auto" disabled={isSubmitting} type="submit">
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              Run mock workflow
+              Run workflow
             </Button>
           </div>
         </form>

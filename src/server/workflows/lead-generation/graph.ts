@@ -100,7 +100,7 @@ function createLeadGenerationGraph(providers: LeadGenerationProviders) {
           state.steps,
           "search_importers",
           "completed",
-          `Found ${rawImporters.length} mock importer candidates.`
+          `Found ${rawImporters.length} product-search seed candidates.`
         )
       };
     })
@@ -128,7 +128,7 @@ function createLeadGenerationGraph(providers: LeadGenerationProviders) {
           state.steps,
           "resolve_missing_websites",
           "completed",
-          `Resolved ${missingBefore} missing websites with the mock search API.`
+          `Resolved ${missingBefore} missing websites with the search provider router.`
         )
       };
     })

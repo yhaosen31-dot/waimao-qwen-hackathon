@@ -4,19 +4,21 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  ClipboardCheck,
   Bell,
   ChevronDown,
+  ClipboardCheck,
   FileText,
   HelpCircle,
   Home,
   LayoutDashboard,
+  LogOut,
   Mail,
   PlusCircle,
   PlayCircle,
   Search,
   Send,
   Settings,
+  Upload,
   Users
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,6 +41,12 @@ const navItems = [
     label: "任务运行",
     icon: PlayCircle,
     match: (pathname: string) => pathname.startsWith("/runs/") && pathname !== "/runs/new"
+  },
+  {
+    href: "/imports/new",
+    label: "Excel 导入",
+    icon: Upload,
+    match: (pathname: string) => pathname.startsWith("/imports")
   },
   {
     href: "/reviews",
@@ -68,7 +76,7 @@ const navItems = [
     href: "/drafts",
     label: "发送记录",
     icon: Send,
-    match: () => false
+    match: (pathname: string) => pathname.startsWith("/drafts")
   },
   {
     href: "/settings",
@@ -86,6 +94,14 @@ const pageTitles: Array<{ match: (pathname: string) => boolean; title: string }>
   {
     match: (pathname) => pathname.startsWith("/runs/"),
     title: "任务运行 / LangGraph 控制台"
+  },
+  {
+    match: (pathname) => pathname === "/imports/new",
+    title: "Excel 导入获客"
+  },
+  {
+    match: (pathname) => pathname.startsWith("/imports/"),
+    title: "导入任务详情"
   },
   {
     match: (pathname) => pathname.startsWith("/companies/"),
@@ -109,14 +125,24 @@ const pageTitles: Array<{ match: (pathname: string) => boolean; title: string }>
   },
   {
     match: (pathname) => pathname.startsWith("/drafts"),
-    title: "邮件草稿 / 人工审核"
+    title: "发送记录"
   }
 ];
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  authEnabled,
+  children,
+  userEmail
+}: {
+  authEnabled?: boolean;
+  children: ReactNode;
+  userEmail?: string;
+}) {
   const pathname = usePathname();
-  const pageTitle =
-    pageTitles.find((item) => item.match(pathname))?.title ?? "跨境获客 AI Agent";
+  const isAuthPage = pathname === "/login" || pathname === "/unauthorized";
+  const pageTitle = pageTitles.find((item) => item.match(pathname))?.title ?? "跨境获客 AI Agent";
+
+  if (isAuthPage) return <>{children}</>;
 
   return (
     <div className="min-h-screen bg-[#f7faff] text-slate-950">
@@ -132,15 +158,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4">
           {navItems.map((item) => {
-            const isActive = item.match?.(pathname) ?? pathname === item.href;
+            const isActive = item.match(pathname);
             return (
               <Link
-                key={`${item.label}-${item.href}`}
-                href={item.href}
                 className={cn(
                   "flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700",
                   isActive && "bg-blue-50 text-blue-700"
                 )}
+                href={item.href}
+                key={`${item.label}-${item.href}`}
               >
                 <item.icon className="h-5 w-5" />
                 {item.label}
@@ -152,7 +178,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4">
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span>当前套餐</span>
-              <Link className="font-medium text-blue-600" href="/runs/new">
+              <Link className="font-medium text-blue-600" href="/settings">
                 升级套餐
               </Link>
             </div>
@@ -168,7 +194,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <Link
             className="flex h-10 items-center gap-3 text-sm font-medium text-slate-600 hover:text-blue-700"
-            href="/runs/new"
+            href="/settings"
           >
             <HelpCircle className="h-5 w-5" />
             帮助中心
@@ -205,10 +231,26 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full border border-slate-200 bg-[linear-gradient(135deg,#dbeafe,#f8fafc)]" />
               <div className="leading-tight">
-                <div className="text-sm font-semibold">张伟</div>
-                <div className="text-xs text-slate-500">管理员</div>
+                <div className="max-w-[180px] truncate text-sm font-semibold">
+                  {userEmail ?? "本地调试"}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {authEnabled ? "已登录" : "Auth 未启用"}
+                </div>
               </div>
-              <ChevronDown className="h-4 w-4 text-slate-500" />
+              {authEnabled ? (
+                <form action="/auth/logout" method="post">
+                  <button
+                    aria-label="退出登录"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-blue-700"
+                    type="submit"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </form>
+              ) : (
+                <ChevronDown className="h-4 w-4 text-slate-500" />
+              )}
             </div>
           </div>
           <Link

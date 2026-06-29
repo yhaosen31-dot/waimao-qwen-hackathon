@@ -1,8 +1,9 @@
+// Disabled legacy connector: retained for reference only. Current providers and APIs must not import or run this module.
 import path from "node:path";
 import type { CrossSearchConfig } from "@/browser/crossSearch/types";
 
-const DEFAULT_BASE_URL = "https://vip.dqxx.com.cn/Home/Desktop";
-const DEFAULT_ONE_SEARCH_URL = "https://vip.dqxx.com.cn/OneSearch/Home";
+const DEFAULT_BASE_URL = "";
+const DEFAULT_ONE_SEARCH_URL = "";
 const DEFAULT_PROFILE_DIR = ".playwright/cross-search-profile";
 const DEFAULT_TIMEOUT_MS = 30_000;
 

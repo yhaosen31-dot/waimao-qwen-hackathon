@@ -22,7 +22,7 @@ export default async function CustomersPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-normal">Customer CRM</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Mock importer records enriched with contacts, domains, scores, and outreach context.
+            Imported and searched customer records enriched with contacts, domains, scores, and outreach context.
           </p>
         </div>
         <Button asChild>

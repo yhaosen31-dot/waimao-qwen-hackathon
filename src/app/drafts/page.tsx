@@ -16,7 +16,7 @@ export default async function DraftsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-normal">Email drafts</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Local draft inbox for mock outreach. Nothing here is sent to Resend or SMTP.
+            Local draft inbox for reviewed outreach. Nothing here is sent to Resend or SMTP.
           </p>
         </div>
         <Button asChild>

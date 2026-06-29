@@ -54,7 +54,7 @@ export const mockProviders: LeadGenerationProviders = {
           ? "hydraulic accumulator"
           : normalizedProduct,
         buyerIntent:
-          "Find importers, distributors, repair houses, and industrial procurement teams with recurring replacement-parts demand."
+          "Find distributors, repair houses, and industrial procurement teams with recurring replacement-parts demand."
       };
     }
   },
@@ -69,7 +69,7 @@ export const mockProviders: LeadGenerationProviders = {
           seed,
           family,
           "diaphragm accumulator supplier",
-          "hydraulic accumulator importer",
+          "hydraulic accumulator distributor",
           "industrial hydraulic accumulator",
           "pressure accumulator for hydraulic system",
           "nitrogen charged diaphragm accumulator",

@@ -4,36 +4,51 @@ import { nanoid } from "nanoid";
 import {
   leadGenerationStepLabels,
   leadGenerationStepOrder
-} from "@/mock/mockData";
+} from "@/lib/lead-generation-steps";
 import type {
   CompanyResults,
   Company,
+  CompanyNote,
+  AuditLog,
   Contact,
+  ColumnMapping,
+  CreateImportJobInput,
   CreateRunInput,
   EmailAddress,
   EmailDraft,
   EmailLog,
   EntityId,
   Evidence,
+  ImportJob,
+  ImportRow,
   Keyword,
   LocalJsonDatabase,
+  PhoneNumber,
   Run,
   RunResults,
   RunStep,
+  SearchProviderName,
   SaveContactInput,
   SaveCompanyInput,
+  SaveCompanyNoteInput,
   SaveEmailAddressInput,
   SaveEmailDraftInput,
   SaveEmailLogInput,
   SaveEvidenceInput,
+  SaveImportRowInput,
   SaveKeywordInput,
+  SavePhoneNumberInput,
+  SaveAuditLogInput,
   SaveWhatsappNumberInput,
+  SearchMode,
+  SearchQueryType,
   WhatsappNumber,
   UpdateRunStepInput
 } from "@/types";
 
 const dataDir = path.join(process.cwd(), "data");
 const storePath = path.join(dataDir, "local-store.json");
+let storeWriteQueue = Promise.resolve();
 
 export function createEmptyDatabase(): LocalJsonDatabase {
   return {
@@ -41,35 +56,246 @@ export function createEmptyDatabase(): LocalJsonDatabase {
     runs: [],
     runSteps: [],
     keywords: [],
+    importJobs: [],
+    importRows: [],
+    columnMappings: [],
+    searchQueryLogs: [],
+    searchProviderUsage: [],
     companies: [],
     contacts: [],
     emailAddresses: [],
     whatsappNumbers: [],
+    phoneNumbers: [],
     evidence: [],
     emailDrafts: [],
+    companyNotes: [],
     emailLogs: [],
+    auditLogs: [],
     updatedAt: now()
   };
 }
 
 export async function readStore(): Promise<LocalJsonDatabase> {
   await ensureStore();
+  await storeWriteQueue.catch(() => undefined);
   const content = await fs.readFile(storePath, "utf8");
-  return JSON.parse(content) as LocalJsonDatabase;
+  return normalizeDatabase(JSON.parse(content));
+}
+
+export async function readCrmStore(): Promise<LocalJsonDatabase> {
+  return readStore();
+}
+
+export async function readReviewStore(): Promise<LocalJsonDatabase> {
+  return readStore();
 }
 
 export async function writeStore(db: LocalJsonDatabase) {
-  await fs.mkdir(dataDir, { recursive: true });
   const nextDb = {
-    ...db,
+    ...normalizeDatabase(db),
     updatedAt: now()
   };
-  await fs.writeFile(storePath, JSON.stringify(nextDb, null, 2), "utf8");
+
+  storeWriteQueue = storeWriteQueue
+    .catch(() => undefined)
+    .then(async () => {
+      await fs.mkdir(dataDir, { recursive: true });
+      await fs.writeFile(storePath, JSON.stringify(nextDb, null, 2), "utf8");
+    });
+
+  await storeWriteQueue;
   return nextDb;
 }
 
 export async function resetStore() {
   return writeStore(createEmptyDatabase());
+}
+
+export async function createImportJob(input: CreateImportJobInput): Promise<ImportJob> {
+  const db = await readStore();
+  const createdAt = input.createdAt ?? now();
+  const importJob: ImportJob = {
+    ...input,
+    id: input.id ?? createId("import_job"),
+    errorMessage: input.errorMessage,
+    createdAt,
+    updatedAt: input.updatedAt ?? createdAt
+  };
+
+  await writeStore({
+    ...db,
+    importJobs: upsertManyById(db.importJobs, [importJob])
+  });
+
+  return importJob;
+}
+
+export async function updateImportJob(
+  importJobId: EntityId,
+  patch: Partial<Omit<ImportJob, "id" | "createdAt">>
+): Promise<ImportJob> {
+  const db = await readStore();
+  const existing = db.importJobs.find((job) => job.id === importJobId);
+
+  if (!existing) throw new Error(`Import job not found: ${importJobId}`);
+
+  const updatedAt = now();
+  const importJob: ImportJob = {
+    ...existing,
+    ...patch,
+    id: existing.id,
+    createdAt: existing.createdAt,
+    updatedAt
+  };
+
+  await writeStore({
+    ...db,
+    importJobs: upsertManyById(db.importJobs, [importJob])
+  });
+
+  return importJob;
+}
+
+export async function listImportJobs() {
+  const db = await readStore();
+  return [...db.importJobs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getImportJob(importJobId: EntityId) {
+  const db = await readStore();
+  return db.importJobs.find((job) => job.id === importJobId) ?? null;
+}
+
+export async function saveImportRows(
+  importJobId: EntityId,
+  input: SaveImportRowInput[]
+): Promise<ImportRow[]> {
+  const db = await readStore();
+  assertImportJobExists(db, importJobId);
+
+  const timestamp = now();
+  const rows: ImportRow[] = input.map((row) => ({
+    ...row,
+    id: row.id ?? createId("import_row"),
+    importJobId,
+    rawData: row.rawData ?? {},
+    status: row.status ?? "parsed",
+    createdAt: row.createdAt ?? timestamp,
+    updatedAt: timestamp
+  }));
+
+  await writeStore({
+    ...db,
+    importRows: [...db.importRows.filter((row) => row.importJobId !== importJobId), ...rows]
+  });
+
+  return rows;
+}
+
+export async function getImportRows(importJobId: EntityId) {
+  const db = await readStore();
+  return db.importRows
+    .filter((row) => row.importJobId === importJobId)
+    .sort((a, b) => a.rowIndex - b.rowIndex);
+}
+
+export async function saveColumnMapping(input: ColumnMapping): Promise<ColumnMapping> {
+  const db = await readStore();
+  assertImportJobExists(db, input.importJobId);
+
+  await writeStore({
+    ...db,
+    columnMappings: [
+      ...db.columnMappings.filter((mapping) => mapping.importJobId !== input.importJobId),
+      input
+    ]
+  });
+
+  return input;
+}
+
+export async function getColumnMapping(importJobId: EntityId) {
+  const db = await readStore();
+  return db.columnMappings.find((mapping) => mapping.importJobId === importJobId) ?? null;
+}
+
+export async function getImportJobResults(importJobId: EntityId) {
+  const db = await readStore();
+  const importJob = db.importJobs.find((job) => job.id === importJobId);
+
+  if (!importJob) return null;
+
+  return {
+    importJob,
+    rows: db.importRows
+      .filter((row) => row.importJobId === importJobId)
+      .sort((a, b) => a.rowIndex - b.rowIndex),
+    mapping: db.columnMappings.find((mapping) => mapping.importJobId === importJobId) ?? null,
+    companies: db.companies.filter((company) => company.importJobId === importJobId)
+  };
+}
+
+export async function recordSearchQueryLog(input: {
+  companyId?: EntityId;
+  importJobId?: EntityId;
+  query: string;
+  searchType: SearchQueryType;
+  mode: SearchMode;
+  provider?: SearchProviderName;
+  status: "success" | "failed" | "fallback" | "skipped";
+  resultCount: number;
+  averageConfidence?: number;
+  fallbackReason?: string;
+  errorMessage?: string;
+}) {
+  const db = await readStore();
+  const timestamp = now();
+  const log = {
+    id: createId("search_log"),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...input
+  };
+
+  await writeStore({
+    ...db,
+    searchQueryLogs: [...db.searchQueryLogs, log]
+  });
+
+  return log;
+}
+
+export async function updateSearchProviderUsage(input: {
+  provider: SearchProviderName;
+  success: boolean;
+  fallbackUsed?: boolean;
+  errorMessage?: string;
+}) {
+  const db = await readStore();
+  const timestamp = now();
+  const existing = db.searchProviderUsage.find((item) => item.provider === input.provider);
+  const usage = {
+    id: existing?.id ?? createId("search_usage"),
+    provider: input.provider,
+    totalQueries: (existing?.totalQueries ?? 0) + 1,
+    successfulQueries: (existing?.successfulQueries ?? 0) + (input.success ? 1 : 0),
+    failedQueries: (existing?.failedQueries ?? 0) + (input.success ? 0 : 1),
+    fallbackCount: (existing?.fallbackCount ?? 0) + (input.fallbackUsed ? 1 : 0),
+    lastUsedAt: timestamp,
+    lastError: input.errorMessage,
+    createdAt: existing?.createdAt ?? timestamp,
+    updatedAt: timestamp
+  };
+
+  await writeStore({
+    ...db,
+    searchProviderUsage: [
+      ...db.searchProviderUsage.filter((item) => item.provider !== input.provider),
+      usage
+    ]
+  });
+
+  return usage;
 }
 
 export async function createRun(input: CreateRunInput): Promise<Run> {
@@ -219,6 +445,7 @@ export async function saveCompanies(runId: EntityId, input: SaveCompanyInput[]) 
     emails: company.emails ?? [],
     whatsappNumbers: company.whatsappNumbers ?? [],
     buyerFitReasons: company.buyerFitReasons ?? [],
+    buyerFitRisks: company.buyerFitRisks ?? [],
     buyerFit: company.buyerFit ?? {
       score: company.buyerFitScore ?? 0,
       reasons: company.buyerFitReasons ?? [],
@@ -266,6 +493,36 @@ export async function updateCompany(
   });
 
   return company;
+}
+
+export async function saveCompanyNote(input: SaveCompanyNoteInput): Promise<CompanyNote> {
+  const db = await readStore();
+  const existingCompany = db.companies.find((company) => company.id === input.companyId);
+
+  if (!existingCompany) throw new Error(`Company not found: ${input.companyId}`);
+
+  const timestamp = now();
+  const note: CompanyNote = {
+    ...input,
+    id: input.id ?? createId("company_note"),
+    content: input.content.trim(),
+    createdAt: input.createdAt ?? timestamp,
+    updatedAt: timestamp
+  };
+
+  await writeStore({
+    ...db,
+    companyNotes: upsertManyById(db.companyNotes, [note])
+  });
+
+  return note;
+}
+
+export async function listCompanyNotes(companyId: EntityId): Promise<CompanyNote[]> {
+  const db = await readStore();
+  return db.companyNotes
+    .filter((note) => note.companyId === companyId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function updateCompaniesForRun(
@@ -360,6 +617,28 @@ export async function saveWhatsappNumbers(runId: EntityId, input: SaveWhatsappNu
   return whatsappNumbers;
 }
 
+export async function savePhoneNumbers(runId: EntityId, input: SavePhoneNumberInput[]) {
+  const db = await readStore();
+  assertRunExists(db, runId);
+
+  const timestamp = now();
+  const phoneNumbers: PhoneNumber[] = input.map((phoneNumber) => ({
+    ...phoneNumber,
+    id: phoneNumber.id ?? createId("phone"),
+    runId,
+    evidenceIds: phoneNumber.evidenceIds ?? [],
+    createdAt: phoneNumber.createdAt ?? timestamp,
+    updatedAt: timestamp
+  }));
+
+  await writeStore({
+    ...db,
+    phoneNumbers: upsertManyById(db.phoneNumbers, phoneNumbers)
+  });
+
+  return phoneNumbers;
+}
+
 export async function saveEvidence(runId: EntityId, input: SaveEvidenceInput[]) {
   const db = await readStore();
   assertRunExists(db, runId);
@@ -395,6 +674,8 @@ export async function saveEmailDrafts(runId: EntityId, input: SaveEmailDraftInpu
     runId,
     status: draft.status ?? "draft",
     personalizationNotes: draft.personalizationNotes ?? [],
+    usedEvidenceIds: draft.usedEvidenceIds ?? draft.evidenceIds ?? [],
+    styleNotes: draft.styleNotes ?? [],
     evidenceIds: draft.evidenceIds ?? [],
     createdAt: draft.createdAt ?? timestamp,
     updatedAt: timestamp
@@ -482,6 +763,31 @@ export async function saveEmailLogs(runId: EntityId, input: SaveEmailLogInput[])
   return emailLogs;
 }
 
+export async function saveAuditLogs(input: SaveAuditLogInput[]) {
+  const db = await readStore();
+  const timestamp = now();
+  const auditLogs: AuditLog[] = input.map((log) => ({
+    ...log,
+    id: log.id ?? createId("audit_log"),
+    createdAt: log.createdAt ?? timestamp,
+    updatedAt: timestamp
+  }));
+
+  await writeStore({
+    ...db,
+    auditLogs: upsertManyById(db.auditLogs, auditLogs)
+  });
+
+  return auditLogs;
+}
+
+export async function listAuditLogs(limit = 100) {
+  const db = await readStore();
+  return [...db.auditLogs]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, Math.max(1, Math.min(500, limit)));
+}
+
 export async function getRunResults(runId: EntityId): Promise<RunResults | null> {
   const db = await readStore();
   const run = db.runs.find((item) => item.id === runId);
@@ -505,6 +811,7 @@ export async function getRunResults(runId: EntityId): Promise<RunResults | null>
     contacts: db.contacts.filter((contact) => contact.runId === runId),
     emailAddresses: db.emailAddresses.filter((email) => email.runId === runId),
     whatsappNumbers: db.whatsappNumbers.filter((whatsapp) => whatsapp.runId === runId),
+    phoneNumbers: db.phoneNumbers.filter((phone) => phone.runId === runId),
     evidence: db.evidence.filter(
       (evidence) =>
         evidence.runId === runId ||
@@ -542,8 +849,12 @@ export async function getCompanyResults(companyId: EntityId): Promise<CompanyRes
     contacts: db.contacts.filter((contact) => contact.companyId === companyId),
     emailAddresses: db.emailAddresses.filter((email) => email.companyId === companyId),
     whatsappNumbers: db.whatsappNumbers.filter((whatsapp) => whatsapp.companyId === companyId),
+    phoneNumbers: db.phoneNumbers.filter((phone) => phone.companyId === companyId),
     evidence: db.evidence.filter((item) => item.companyId === companyId),
     emailDrafts: db.emailDrafts.filter((draft) => draft.companyId === companyId),
+    companyNotes: db.companyNotes
+      .filter((note) => note.companyId === companyId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     emailLogs: db.emailLogs.filter((log) => log.companyId === companyId)
   };
 }
@@ -556,6 +867,37 @@ async function ensureStore() {
   } catch {
     await fs.writeFile(storePath, JSON.stringify(createEmptyDatabase(), null, 2), "utf8");
   }
+}
+
+function normalizeDatabase(input: unknown): LocalJsonDatabase {
+  const empty = createEmptyDatabase();
+
+  if (!input || typeof input !== "object") return empty;
+
+  const db = input as Partial<LocalJsonDatabase>;
+  return {
+    ...empty,
+    ...db,
+    runs: db.runs ?? [],
+    runSteps: db.runSteps ?? [],
+    keywords: db.keywords ?? [],
+    importJobs: db.importJobs ?? [],
+    importRows: db.importRows ?? [],
+    columnMappings: db.columnMappings ?? [],
+    searchQueryLogs: db.searchQueryLogs ?? [],
+    searchProviderUsage: db.searchProviderUsage ?? [],
+    companies: db.companies ?? [],
+    contacts: db.contacts ?? [],
+    emailAddresses: db.emailAddresses ?? [],
+    whatsappNumbers: db.whatsappNumbers ?? [],
+    phoneNumbers: db.phoneNumbers ?? [],
+    evidence: db.evidence ?? [],
+    emailDrafts: db.emailDrafts ?? [],
+    companyNotes: db.companyNotes ?? [],
+    emailLogs: db.emailLogs ?? [],
+    auditLogs: db.auditLogs ?? [],
+    updatedAt: db.updatedAt ?? empty.updatedAt
+  };
 }
 
 function createInitialRunSteps(runId: EntityId, timestamp: string): RunStep[] {
@@ -590,6 +932,12 @@ function createRunStep(input: {
 function assertRunExists(db: LocalJsonDatabase, runId: EntityId) {
   if (!db.runs.some((run) => run.id === runId)) {
     throw new Error(`Run not found: ${runId}`);
+  }
+}
+
+function assertImportJobExists(db: LocalJsonDatabase, importJobId: EntityId) {
+  if (!db.importJobs.some((job) => job.id === importJobId)) {
+    throw new Error(`Import job not found: ${importJobId}`);
   }
 }
 

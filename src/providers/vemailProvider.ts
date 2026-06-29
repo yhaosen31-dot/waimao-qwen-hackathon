@@ -1,9 +1,7 @@
-import {
-  envFlag,
-  notImplementedProviderError,
-  type ExternalProvider,
-  type ProviderFactoryOptions
-} from "@/providers/types";
+import type { ExternalProvider } from "@/providers/types";
+
+const DISABLED_MESSAGE =
+  "VEmail/foreign-trade email lookup is disabled. Use EXA/Tavily/YOU contact search instead.";
 
 export interface VEmailInput {
   domain: string;
@@ -13,36 +11,18 @@ export interface VEmailInput {
 export interface VEmailResult {
   email: string;
   confidence: number;
-  source: "mock-vemail" | "vemail";
+  source: "vemail-disabled";
 }
 
 export type VEmailProvider = ExternalProvider<VEmailInput, VEmailResult[]>;
 
-export function createVEmailProvider(options: ProviderFactoryOptions = {}): VEmailProvider {
-  const isConfigured = envFlag(process.env.VEMAIL_API_KEY);
-  const mode = options.mode ?? "mock";
-
+export function createVEmailProvider(): VEmailProvider {
   return {
     name: "vemail",
-    mode,
-    isConfigured,
-    async invoke(input) {
-      if (mode === "real") {
-        throw notImplementedProviderError("VEmail");
-      }
-
-      return [
-        {
-          email: `procurement@${input.domain}`,
-          confidence: 0.9,
-          source: "mock-vemail"
-        },
-        {
-          email: `sales@${input.domain}`,
-          confidence: 0.75,
-          source: "mock-vemail"
-        }
-      ];
+    mode: "mock",
+    isConfigured: false,
+    async invoke() {
+      throw new Error(DISABLED_MESSAGE);
     }
   };
 }

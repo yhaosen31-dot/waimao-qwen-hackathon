@@ -1,3 +1,4 @@
+// Disabled legacy connector: retained for reference only. Current providers and APIs must not import or run this module.
 import type { Page } from "playwright";
 import { ensureCrossSearchPage, getCrossSearchSession } from "@/browser/crossSearch/session";
 import type { CrossSearchSessionCheckResult } from "@/browser/crossSearch/types";
@@ -18,6 +19,32 @@ const HUMAN_CHALLENGE_MARKERS = [
   "captcha",
   "qr code",
   "sms verification"
+];
+const LOGIN_FORM_SELECTORS = [
+  'input[type="password"]',
+  'input[name*="password" i]',
+  'input[id*="password" i]',
+  'input[placeholder*="密码"]',
+  'input[placeholder*="账号"]',
+  'input[placeholder*="用户名"]',
+  'input[placeholder*="手机"]',
+  'button:has-text("登录")',
+  'button:has-text("登 录")',
+  'a:has-text("登录")'
+];
+const HUMAN_CHALLENGE_SELECTORS = [
+  'iframe[src*="captcha" i]',
+  'iframe[src*="verify" i]',
+  'iframe[src*="sms" i]',
+  'iframe[src*="qr" i]',
+  '[class*="captcha" i]',
+  '[id*="captcha" i]',
+  '[class*="verify" i]',
+  '[id*="verify" i]',
+  '[class*="qrcode" i]',
+  '[id*="qrcode" i]',
+  'img[src*="qr" i]',
+  'canvas'
 ];
 
 export async function checkCrossSearchLogin(): Promise<CrossSearchSessionCheckResult> {
@@ -45,28 +72,11 @@ export async function inspectCrossSearchPage(page: Page): Promise<CrossSearchSes
   const hasHumanChallenge = HUMAN_CHALLENGE_MARKERS.some((marker) =>
     normalizedText.includes(marker.toLowerCase())
   );
+  const hasLoginForm = await hasVisibleSelector(page, LOGIN_FORM_SELECTORS);
+  const hasHumanChallengeElement =
+    hasHumanChallenge || (await hasVisibleSelector(page, HUMAN_CHALLENGE_SELECTORS));
 
-  if (isLoggedInUrl && !isLoginUrl && (hasLoggedInMarker || !hasLoginMarker)) {
-    return {
-      loggedIn: true,
-      requiresHuman: false,
-      currentUrl,
-      title,
-      reason: "Detected cross-search desktop/workbench URL."
-    };
-  }
-
-  if (hasLoggedInMarker && !hasLoginMarker) {
-    return {
-      loggedIn: true,
-      requiresHuman: false,
-      currentUrl,
-      title,
-      reason: "Detected logged-in workbench markers on the page."
-    };
-  }
-
-  if (hasHumanChallenge) {
+  if (hasHumanChallengeElement) {
     return {
       loggedIn: false,
       requiresHuman: true,
@@ -76,13 +86,33 @@ export async function inspectCrossSearchPage(page: Page): Promise<CrossSearchSes
     };
   }
 
-  if (isLoginUrl || hasLoginMarker) {
+  if (isLoginUrl || hasLoginMarker || hasLoginForm) {
     return {
       loggedIn: false,
       requiresHuman: true,
       currentUrl,
       title,
       reason: "Detected login page or credential form."
+    };
+  }
+
+  if (hasLoggedInMarker && isLoggedInUrl) {
+    return {
+      loggedIn: true,
+      requiresHuman: false,
+      currentUrl,
+      title,
+      reason: "Detected cross-search desktop/workbench URL and logged-in page markers."
+    };
+  }
+
+  if (hasLoggedInMarker) {
+    return {
+      loggedIn: true,
+      requiresHuman: false,
+      currentUrl,
+      title,
+      reason: "Detected logged-in workbench markers on the page."
     };
   }
 
@@ -98,12 +128,8 @@ export async function inspectCrossSearchPage(page: Page): Promise<CrossSearchSes
 export async function detectHumanChallenge(page: Page) {
   const bodyText = normalizeText(await readBodyText(page));
   const textMatched = HUMAN_CHALLENGE_MARKERS.some((marker) => bodyText.includes(marker.toLowerCase()));
-  const challengeFrameCount = await page
-    .locator('iframe[src*="captcha"], iframe[src*="verify"], iframe[src*="sms"], iframe[src*="qr"]')
-    .count()
-    .catch(() => 0);
 
-  return textMatched || challengeFrameCount > 0;
+  return textMatched || (await hasVisibleSelector(page, HUMAN_CHALLENGE_SELECTORS));
 }
 
 async function readBodyText(page: Page) {
@@ -115,4 +141,16 @@ async function readBodyText(page: Page) {
 
 function normalizeText(value: string) {
   return value.replace(/\s+/g, " ").slice(0, 8_000).toLowerCase();
+}
+
+async function hasVisibleSelector(page: Page, selectors: string[]) {
+  for (const selector of selectors) {
+    const locator = page.locator(selector).first();
+    const count = await locator.count().catch(() => 0);
+    if (count > 0 && (await locator.isVisible().catch(() => false))) {
+      return true;
+    }
+  }
+
+  return false;
 }

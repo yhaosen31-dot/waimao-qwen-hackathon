@@ -1,12 +1,25 @@
 import { Annotation } from "@langchain/langgraph";
+import type {
+  CompanyStatus,
+  ContactStatus,
+  EvidenceProvider,
+  SearchMode,
+  SearchProviderName,
+  WebsiteStatus
+} from "@/types";
+
+export type SearchProviderPreference = Exclude<SearchProviderName, "mock">;
 
 export type LeadGenerationNode =
   | "normalizeInput"
   | "generateKeywords"
   | "humanApproveKeywords"
-  | "searchCrossBorderImporters"
+  | "searchCustomersByProduct"
   | "extractCompanyDetails"
+  | "enrichCompanies"
   | "discoverWebsite"
+  | "discoverContacts"
+  | "mergeEvidence"
   | "searchEmailsByDomain"
   | "discoverWhatsappAndContacts"
   | "scoreBuyerFit"
@@ -31,6 +44,10 @@ export interface LeadCandidate {
   products: string[];
   importerProfile: string;
   matchedKeyword: string;
+  sourceUrl?: string;
+  sourceProvider?: string;
+  evidenceText?: string;
+  confidence?: number;
 }
 
 export interface KeywordInsight {
@@ -41,14 +58,17 @@ export interface KeywordInsight {
 
 export interface GraphEvidence {
   type:
-    | "cross_search_mock"
-    | "website_mock"
     | "website_search"
-    | "email_mock"
-    | "whatsapp_mock"
+    | "website_not_found"
+    | "email_search"
+    | "phone_search"
+    | "whatsapp_search"
+    | "social_search"
+    | "buyer_fit"
+    | "email_draft"
+    | "product_search"
     | "contact_search"
-    | "buyer_fit_mock"
-    | "email_draft_mock";
+    | "email_draft";
   title: string;
   url?: string;
   snippet: string;
@@ -74,6 +94,21 @@ export interface GraphCompany {
   linkedin?: string;
   facebook?: string;
   emails: string[];
+  buyerFitTier?: "high" | "medium" | "low" | "unknown";
+  companyRole?: "importer" | "distributor" | "trading_company" | "manufacturer" | "end_user" | "unknown";
+  suggestedAction?: "email_first" | "whatsapp_first" | "manual_review" | "skip";
+  buyerFitRisks?: string[];
+  status?: CompanyStatus;
+  source?: EvidenceProvider;
+  sourceQuery?: string;
+  sourceProvider?: SearchProviderName;
+  websiteStatus?: WebsiteStatus;
+  contactStatus?: ContactStatus;
+  enrichmentStatus?: "pending" | "running" | "completed" | "failed" | "needs_review";
+  productDescription?: string;
+  transactionSummary?: string;
+  evidenceSummary?: string;
+  contactConfidence?: number;
   buyerFitScore?: number;
   leadScore?: number;
   confidence?: number;
@@ -99,6 +134,10 @@ export interface LeadGenerationState {
   runId: string;
   productInput: string;
   targetCount: number;
+  targetCountries: string[];
+  excludedCountries: string[];
+  searchMode: SearchMode;
+  providerPriority: SearchProviderPreference[];
   normalizedProduct?: string;
   keywords: string[];
   keywordInsights: KeywordInsight[];
@@ -116,11 +155,12 @@ export const leadGenerationNodes: LeadGenerationNode[] = [
   "normalizeInput",
   "generateKeywords",
   "humanApproveKeywords",
-  "searchCrossBorderImporters",
+  "searchCustomersByProduct",
   "extractCompanyDetails",
+  "enrichCompanies",
   "discoverWebsite",
-  "searchEmailsByDomain",
-  "discoverWhatsappAndContacts",
+  "discoverContacts",
+  "mergeEvidence",
   "scoreBuyerFit",
   "generateEmailDraft",
   "humanApproveEmail",
@@ -131,9 +171,12 @@ export const leadGenerationNodeLabels: Record<LeadGenerationNode, string> = {
   normalizeInput: "Normalize input",
   generateKeywords: "Generate keywords",
   humanApproveKeywords: "Human approve keywords",
-  searchCrossBorderImporters: "Search cross-border importers",
+  searchCustomersByProduct: "Search customers by product",
   extractCompanyDetails: "Extract company details",
+  enrichCompanies: "Enrich companies",
   discoverWebsite: "Discover website",
+  discoverContacts: "Discover contacts",
+  mergeEvidence: "Merge evidence",
   searchEmailsByDomain: "Search emails by domain",
   discoverWhatsappAndContacts: "Discover WhatsApp and contacts",
   scoreBuyerFit: "Score Buyer Fit",
@@ -146,6 +189,22 @@ export const LeadGenerationAnnotation = Annotation.Root({
   runId: Annotation<string>(),
   productInput: Annotation<string>(),
   targetCount: Annotation<number>(),
+  targetCountries: Annotation<string[]>({
+    reducer: (_current, next) => next,
+    default: () => []
+  }),
+  excludedCountries: Annotation<string[]>({
+    reducer: (_current, next) => next,
+    default: () => []
+  }),
+  searchMode: Annotation<SearchMode>({
+    reducer: (_current, next) => next,
+    default: () => "fallback"
+  }),
+  providerPriority: Annotation<SearchProviderPreference[]>({
+    reducer: (_current, next) => next,
+    default: () => ["exa"]
+  }),
   normalizedProduct: Annotation<string | undefined>({
     reducer: (_current, next) => next,
     default: () => undefined
@@ -198,11 +257,19 @@ export function createInitialLeadGenerationState(input: {
   runId: string;
   productInput: string;
   targetCount: number;
+  targetCountries?: string[];
+  excludedCountries?: string[];
+  searchMode?: SearchMode;
+  providerPriority?: SearchProviderPreference[];
 }): LeadGenerationState {
   return {
     runId: input.runId,
     productInput: input.productInput,
     targetCount: input.targetCount,
+    targetCountries: input.targetCountries ?? [],
+    excludedCountries: input.excludedCountries ?? [],
+    searchMode: input.searchMode ?? "fallback",
+    providerPriority: input.providerPriority ?? ["exa"],
     keywords: [],
     keywordInsights: [],
     approvedKeywords: [],

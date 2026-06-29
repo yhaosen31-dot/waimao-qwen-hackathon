@@ -1,29 +1,40 @@
 import { completeNode, type GraphCompany, type LeadGenerationGraphState } from "@/graphs/state";
+import type { SearchProviderName } from "@/types";
 
 export async function extractCompanyDetails(state: LeadGenerationGraphState) {
   const companies: GraphCompany[] = state.candidates.map((candidate, index) => {
-    const domain = candidate.website ? domainFromWebsite(candidate.website) : mockDomain(candidate.companyName);
+    const domain = candidate.website ? domainFromWebsite(candidate.website) : "";
 
     return {
       id: `company_${state.runId}_${index + 1}`,
       name: candidate.companyName,
       country: candidate.country,
       city: candidate.city,
-      website: candidate.website ?? `https://www.${domain}`,
+      website: candidate.website ?? "",
       domain,
       products: candidate.products,
       importerProfile: candidate.importerProfile,
       sourceKeyword: candidate.matchedKeyword,
+      sourceQuery: candidate.matchedKeyword,
+      sourceProvider: normalizeSearchProvider(candidate.sourceProvider),
+      source: "product_search",
+      status: "product_search_candidate",
+      enrichmentStatus: "pending",
+      websiteStatus: candidate.website ? "found" : "not_started",
+      contactStatus: "not_started",
       emails: [],
       buyerFitReasons: [],
       evidence: [
         {
-          type: "cross_search_mock",
-          title: `${candidate.companyName} importer match`,
-          url: candidate.website,
-          snippet: `Matched keyword "${candidate.matchedKeyword}" from mock cross-border search.`,
+          type: "product_search",
+          title: `${candidate.companyName} product-search match`,
+          url: candidate.sourceUrl ?? candidate.website,
+          snippet:
+            candidate.evidenceText ??
+            `Matched keyword "${candidate.matchedKeyword}" from product search seed data.`,
+          source: candidate.sourceProvider ?? "product_search",
           rawText: candidate.importerProfile,
-          confidence: 0.86
+          confidence: candidate.confidence ?? 0.86
         }
       ]
     };
@@ -34,7 +45,7 @@ export async function extractCompanyDetails(state: LeadGenerationGraphState) {
     ...completeNode(
       state,
       "extractCompanyDetails",
-      `Extracted mock details for ${companies.length} companies.`
+      `Extracted product-search details for ${companies.length} companies.`
     )
   };
 }
@@ -43,10 +54,8 @@ function domainFromWebsite(website: string) {
   return website.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "");
 }
 
-function mockDomain(companyName: string) {
-  return `${companyName
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "")
-    .slice(0, 28)}.com`;
+function normalizeSearchProvider(value: string | undefined): SearchProviderName | undefined {
+  return value === "exa" || value === "tavily" || value === "you" || value === "mock"
+    ? value
+    : undefined;
 }

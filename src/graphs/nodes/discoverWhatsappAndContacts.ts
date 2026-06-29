@@ -13,7 +13,7 @@ export async function discoverWhatsappAndContacts(state: LeadGenerationGraphStat
       searchErrors.push(...aggregation.errors.map((error) => `${company.name}: ${error}`));
 
       const phone = aggregation.phones[0];
-      const whatsapp = aggregation.whatsapps[0];
+      const whatsapp = aggregation.websiteWhatsapps[0] ?? aggregation.whatsapps[0];
       const linkedin = aggregation.linkedins[0];
       const facebook = aggregation.facebooks[0];
 

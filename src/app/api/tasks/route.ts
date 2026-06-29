@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { persistWorkflowResult, listTasks } from "@/server/storage/json-store";
-import { runLeadGenerationWorkflow } from "@/server/workflows/lead-generation";
+import { listTasks } from "@/server/storage/json-store";
 
 export const runtime = "nodejs";
 
@@ -16,14 +15,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const payload = createTaskSchema.parse(await request.json());
-  const result = await runLeadGenerationWorkflow(payload);
-  await persistWorkflowResult(result);
+  createTaskSchema.parse(await request.json());
 
-  return NextResponse.json({
-    taskId: result.task.id,
-    task: result.task,
-    customers: result.customers.length,
-    drafts: result.drafts.length
-  });
+  return NextResponse.json(
+    {
+      ok: false,
+      message: "Legacy task workflow is disabled. Use /api/runs/start or Excel import instead."
+    },
+    { status: 410 }
+  );
 }

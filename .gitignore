@@ -19,7 +19,11 @@ build/
 
 # Local JSON data. Keep the folder, never publish CRM/customer data.
 data/*.json
+data/imports/
 !data/.gitkeep
+
+# Local backups can contain customer data.
+backups/
 
 # Playwright browser profiles, login cookies, traces, and reports
 .playwright/

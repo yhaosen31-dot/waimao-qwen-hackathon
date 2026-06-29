@@ -1,7 +1,11 @@
+// Disabled legacy connector: retained for reference only. Current providers and APIs must not import or run this module.
 import { mkdir } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { getCrossSearchConfig } from "@/browser/crossSearch/config";
 import type { CrossSearchConfig } from "@/browser/crossSearch/types";
+
+const DISABLED_LEGACY_CONNECTOR =
+  "Cross search Playwright connector is disabled because account risk control was detected.";
 
 export interface CrossSearchBrowserSession {
   context: BrowserContext;
@@ -17,6 +21,9 @@ let activeSessionPromise: Promise<CrossSearchBrowserSession> | null = null;
 export async function createCrossSearchSession(
   overrides: Partial<CrossSearchConfig> = {}
 ): Promise<CrossSearchBrowserSession> {
+  void overrides;
+  throw new Error(DISABLED_LEGACY_CONNECTOR);
+
   const config = { ...getCrossSearchConfig(), ...overrides };
   await mkdir(config.profileDir, { recursive: true });
 

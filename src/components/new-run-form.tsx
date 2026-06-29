@@ -2,19 +2,27 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Info, Loader2, Send, X } from "lucide-react";
+import { Info, Loader2, Plus, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import type { SearchMode, SearchProviderName } from "@/types";
 
-const targetCountries = ["美国", "德国", "墨西哥"];
-const excludedCountries = ["中国", "俄罗斯", "伊朗"];
+type ProviderPriority = Exclude<SearchProviderName, "mock">;
+
+const defaultTargetCountries = ["美国", "德国", "墨西哥"];
+const defaultExcludedCountries = ["中国", "俄罗斯", "伊朗"];
+const commonCountries = ["美国", "德国", "墨西哥", "加拿大", "巴西", "秘鲁", "哥伦比亚", "智利", "英国", "澳大利亚"];
 
 export function NewRunForm() {
   const router = useRouter();
   const [productInput, setProductInput] = useState("diaphragm accumulator");
   const [targetCustomerCount, setTargetCustomerCount] = useState(20);
+  const [targetCountries, setTargetCountries] = useState(defaultTargetCountries);
+  const [excludedCountries, setExcludedCountries] = useState(defaultExcludedCountries);
+  const [searchMode, setSearchMode] = useState<SearchMode>("economy");
+  const [providerPriority, setProviderPriority] = useState<ProviderPriority>("exa");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,17 +39,21 @@ export function NewRunForm() {
         },
         body: JSON.stringify({
           productInput,
-          targetCount: targetCustomerCount
+          targetCount: targetCustomerCount,
+          targetCountries,
+          excludedCountries,
+          searchMode,
+          providerPriority
         })
       });
 
-      if (!response.ok) throw new Error("Failed to start run.");
+      if (!response.ok) throw new Error("启动获客任务失败。");
 
       const data = (await response.json()) as { runId: string };
       router.push(`/runs/${data.runId}`);
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unexpected error.");
+      setError(caught instanceof Error ? caught.message : "出现未知错误。");
     } finally {
       setIsSubmitting(false);
     }
@@ -58,7 +70,7 @@ export function NewRunForm() {
           id="productInput"
           value={productInput}
           onChange={(event) => setProductInput(event.target.value)}
-          placeholder="diaphragm accumulator"
+          placeholder="隔膜式蓄能器 / diaphragm accumulator"
         />
       </div>
 
@@ -77,11 +89,42 @@ export function NewRunForm() {
         />
       </div>
 
-      <TagSelect label="目标国家" values={targetCountries} />
-      <TagSelect label="排除国家" values={excludedCountries} />
+      <CountryTagInput
+        label="目标国家"
+        values={targetCountries}
+        onChange={setTargetCountries}
+        placeholder="输入国家，回车添加"
+      />
+      <CountryTagInput
+        label="排除国家"
+        values={excludedCountries}
+        onChange={setExcludedCountries}
+        placeholder="输入不想搜索的国家"
+      />
+
+      <SelectRow
+        label="搜索模式"
+        value={searchMode}
+        onChange={(value) => setSearchMode(value as SearchMode)}
+        options={[
+          { value: "economy", label: "economy：内测推荐，速度快，只用首选" },
+          { value: "fallback", label: "fallback：结果差时切换，较慢" },
+          { value: "deep_verify", label: "deep_verify：最多两个源验证" }
+        ]}
+      />
+      <SelectRow
+        label="优先搜索源"
+        value={providerPriority}
+        onChange={(value) => setProviderPriority(value as ProviderPriority)}
+        options={[
+          { value: "exa", label: "EXA" },
+          { value: "tavily", label: "Tavily" },
+          { value: "you", label: "YOU" }
+        ]}
+      />
 
       <ToggleRow checked label="生成开发信草稿" />
-      <ToggleRow checked label="允许发送邮件" mutedNote />
+      <DisabledMailRow />
 
       <Button
         className="h-11 w-full rounded-lg bg-blue-600 text-sm font-semibold shadow-sm shadow-blue-200 hover:bg-blue-700"
@@ -96,43 +139,138 @@ export function NewRunForm() {
   );
 }
 
-function TagSelect({ label, values }: { label: string; values: string[] }) {
+function CountryTagInput({
+  label,
+  values,
+  onChange,
+  placeholder
+}: {
+  label: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+  placeholder: string;
+}) {
+  const [draft, setDraft] = useState("");
+
+  function addCountries(rawValue = draft) {
+    const incoming = rawValue
+      .split(/[,，;；\n]+/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (incoming.length === 0) return;
+
+    const next = Array.from(new Set([...values, ...incoming])).slice(0, 20);
+    onChange(next);
+    setDraft("");
+  }
+
+  function removeCountry(value: string) {
+    onChange(values.filter((item) => item !== value));
+  }
+
   return (
-    <div className="grid grid-cols-[112px_1fr] items-center gap-3">
-      <div className="whitespace-nowrap text-sm text-slate-700">{label}</div>
-      <div className="flex min-h-10 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2">
-        <div className="flex min-w-0 flex-wrap gap-1.5">
-          {values.map((value) => (
-            <span
-              className="inline-flex h-6 items-center gap-1 rounded-md bg-slate-100 px-2 text-xs text-slate-700"
-              key={value}
-            >
-              {value}
-              <X className="h-3 w-3 text-slate-400" />
-            </span>
-          ))}
+    <div className="grid grid-cols-[112px_1fr] items-start gap-3">
+      <div className="pt-2 text-sm text-slate-700">{label}</div>
+      <div className="space-y-2">
+        <div className="flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            {values.map((value) => (
+              <span
+                className="inline-flex h-6 items-center gap-1 rounded-md bg-blue-50 px-2 text-xs text-blue-700"
+                key={value}
+              >
+                {value}
+                <button
+                  aria-label={`删除 ${value}`}
+                  className="rounded-sm text-blue-400 hover:bg-blue-100 hover:text-blue-700"
+                  onClick={() => removeCountry(value)}
+                  type="button"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <input
+              className="h-7 min-w-32 flex-1 border-0 bg-transparent px-1 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+              value={draft}
+              onBlur={() => addCountries()}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === ",") {
+                  event.preventDefault();
+                  addCountries();
+                }
+                if (event.key === "Backspace" && !draft && values.length > 0) {
+                  removeCountry(values[values.length - 1]);
+                }
+              }}
+              placeholder={values.length === 0 ? placeholder : ""}
+            />
+          </div>
+          <button
+            aria-label={`添加${label}`}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => addCountries()}
+            type="button"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
         </div>
-        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+        <div className="flex flex-wrap gap-1.5">
+          {commonCountries
+            .filter((country) => !values.includes(country))
+            .slice(0, 8)
+            .map((country) => (
+              <button
+                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                key={country}
+                onClick={() => onChange(Array.from(new Set([...values, country])).slice(0, 20))}
+                type="button"
+              >
+                {country}
+              </button>
+            ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function ToggleRow({
-  checked,
+function SelectRow({
   label,
-  mutedNote
+  value,
+  onChange,
+  options
 }: {
-  checked: boolean;
   label: string;
-  mutedNote?: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
 }) {
   return (
     <div className="grid grid-cols-[112px_1fr] items-center gap-3">
-      <div className="flex items-center gap-1.5 whitespace-nowrap text-sm text-slate-700">
-        {label}
-        {mutedNote ? <Info className="h-3.5 w-3.5 text-slate-400" /> : null}
-      </div>
+      <Label className="whitespace-nowrap text-sm text-slate-700">{label}</Label>
+      <select
+        className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function ToggleRow({ checked, label }: { checked: boolean; label: string }) {
+  return (
+    <div className="grid grid-cols-[112px_1fr] items-center gap-3">
+      <div className="whitespace-nowrap text-sm text-slate-700">{label}</div>
       <label className="relative inline-flex w-fit cursor-pointer items-center">
         <input className="peer sr-only" defaultChecked={checked} type="checkbox" />
         <span
@@ -142,6 +280,20 @@ function ToggleRow({
           )}
         />
       </label>
+    </div>
+  );
+}
+
+function DisabledMailRow() {
+  return (
+    <div className="grid grid-cols-[112px_1fr] items-center gap-3">
+      <div className="flex items-center gap-1.5 whitespace-nowrap text-sm text-slate-700">
+        真实发送邮件
+        <Info className="h-3.5 w-3.5 text-slate-400" />
+      </div>
+      <span className="w-fit rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+        已关闭
+      </span>
     </div>
   );
 }

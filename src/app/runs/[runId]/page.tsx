@@ -1,15 +1,18 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, Clock, FileText, Mail, SkipForward, Users } from "lucide-react";
+import { CheckCircle2, Clock, FileText, Mail, ServerCog, SkipForward, Users } from "lucide-react";
 import { EmailDraftReviewForm } from "@/components/email-draft-review-form";
+import { ForceEmailDraftButton } from "@/components/force-email-draft-button";
 import { KeywordApprovalForm } from "@/components/keyword-approval-form";
+import { RunProgressPoller } from "@/components/run-progress-poller";
 import { RunStepStatusBadge } from "@/components/run-step-status-badge";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getRunResults } from "@/lib/store";
+import { buyerFitLabels, labelValue, suggestedActionLabels } from "@/lib/crm-labels";
+import { getRunResults } from "@/repositories/store";
 import { formatDateTime } from "@/lib/utils";
 import type { Keyword } from "@/types";
 
@@ -38,9 +41,52 @@ export default async function RunDetailPage({ params }: Params) {
   const rejectedKeywords = results.keywords.filter((keyword) => keyword.status === "rejected");
   const approvedDrafts = results.emailDrafts.filter((draft) => draft.status === "approved");
   const skippedDrafts = results.emailDrafts.filter((draft) => draft.status === "skipped");
+  const searchMode = String(results.run.metadata?.searchMode ?? "fallback");
+  const providerPriority = Array.isArray(results.run.metadata?.providerPriority)
+    ? results.run.metadata.providerPriority.join(", ")
+    : "exa";
+  const queueStatus =
+    typeof results.run.metadata?.queueStatus === "string" ? results.run.metadata.queueStatus : undefined;
+  const queueJobId =
+    typeof results.run.metadata?.queueJobId === "string" ? results.run.metadata.queueJobId : undefined;
+  const currentQueueStep =
+    typeof results.run.metadata?.currentQueueStep === "string"
+      ? results.run.metadata.currentQueueStep
+      : undefined;
+  const displayStatus =
+    results.run.status === "created" &&
+    (queueStatus === "queued" || queueStatus === "running" || queueStatus === "waiting_review")
+      ? queueStatus
+      : results.run.status;
+  const buyerFitStats = {
+    scored: results.companies.filter((company) => Boolean(company.buyerFitTier)).length,
+    high: results.companies.filter((company) => company.buyerFitTier === "high").length,
+    medium: results.companies.filter((company) => company.buyerFitTier === "medium").length,
+    low: results.companies.filter((company) => company.buyerFitTier === "low").length,
+    unknown: results.companies.filter((company) => company.buyerFitTier === "unknown").length,
+    manualReview: results.companies.filter(
+      (company) => company.suggestedAction === "manual_review"
+    ).length
+  };
+  const enrichmentStats = {
+    websiteFound: results.companies.filter((company) => Boolean(company.primaryWebsite ?? company.website)).length,
+    emailFound: new Set(results.emailAddresses.map((email) => email.companyId)).size,
+    whatsappFound: new Set(results.whatsappNumbers.map((whatsapp) => whatsapp.companyId)).size,
+    draftsWaitingReview: results.emailDrafts.filter((draft) => draft.status === "waiting_review").length,
+    productSearchCandidates: results.companies.filter((company) => company.source === "product_search").length
+  };
+  const activeDraftCompanyIds = new Set(
+    results.emailDrafts.filter((draft) => draft.status !== "skipped").map((draft) => draft.companyId)
+  );
+  const forceDraftCandidates = results.companies.filter((company) => !activeDraftCompanyIds.has(company.id));
+  const emailByCompanyId = new Map<string, string>();
+  for (const email of results.emailAddresses) {
+    if (!emailByCompanyId.has(email.companyId)) emailByCompanyId.set(email.companyId, email.email);
+  }
 
   return (
     <div className="space-y-6">
+      <RunProgressPoller runId={results.run.id} status={displayStatus} />
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-normal">
@@ -51,8 +97,8 @@ export default async function RunDetailPage({ params }: Params) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant={results.run.status === "completed" ? "success" : "warning"}>
-            {results.run.status}
+          <Badge variant={displayStatus === "completed" ? "success" : "warning"}>
+            {displayStatus}
           </Badge>
           <Button asChild variant="outline">
             <Link href="/reviews">Reviews</Link>
@@ -65,7 +111,7 @@ export default async function RunDetailPage({ params }: Params) {
 
       <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-7">
         <StatCard icon={Clock} label="Progress" value={`${completedCount}/${results.runSteps.length}`} />
-        <StatCard icon={CheckCircle2} label="Status" value={results.run.status} />
+        <StatCard icon={CheckCircle2} label="Status" value={displayStatus} />
         <StatCard icon={Users} label="Companies" value={results.companies.length} />
         <StatCard icon={FileText} label="Drafts" value={results.emailDrafts.length} />
         <StatCard icon={Mail} label="Approved" value={approvedDrafts.length} />
@@ -73,10 +119,40 @@ export default async function RunDetailPage({ params }: Params) {
         <StatCard icon={FileText} label="Keywords" value={approvedKeywords.length} />
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2">
+        <StatCard icon={FileText} label="Search mode" value={searchMode} />
+        <StatCard icon={FileText} label="Provider priority" value={providerPriority} />
+      </div>
+
+      {queueStatus || queueJobId ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard icon={ServerCog} label="Queue status" value={queueStatus ?? "-"} />
+          <StatCard icon={ServerCog} label="Queue job" value={queueJobId ?? "-"} />
+          <StatCard icon={ServerCog} label="Current queue step" value={currentQueueStep ?? "-"} />
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <StatCard icon={Users} label="Scored" value={buyerFitStats.scored} />
+        <StatCard icon={Users} label="High" value={buyerFitStats.high} />
+        <StatCard icon={Users} label="Medium" value={buyerFitStats.medium} />
+        <StatCard icon={Users} label="Low" value={buyerFitStats.low} />
+        <StatCard icon={Users} label="Unknown" value={buyerFitStats.unknown} />
+        <StatCard icon={Users} label="Manual review" value={buyerFitStats.manualReview} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
+        <StatCard icon={Users} label="Product candidates" value={enrichmentStats.productSearchCandidates} />
+        <StatCard icon={FileText} label="Websites found" value={enrichmentStats.websiteFound} />
+        <StatCard icon={Mail} label="Emails found" value={enrichmentStats.emailFound} />
+        <StatCard icon={Mail} label="WhatsApp found" value={enrichmentStats.whatsappFound} />
+        <StatCard icon={Clock} label="Waiting review" value={enrichmentStats.draftsWaitingReview} />
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>LangGraph 节点进度</CardTitle>
-          <CardDescription>每个 mock 节点的执行状态和摘要。</CardDescription>
+          <CardDescription>每个 LangGraph 节点的执行状态和摘要。</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -101,7 +177,7 @@ export default async function RunDetailPage({ params }: Params) {
         <CardHeader>
           <CardTitle>关键词审核结果</CardTitle>
           <CardDescription>
-            只有 approved keywords 会进入跨境搜 mock 客户生成。
+            只有 approved keywords 会进入产品搜索获客流程。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -158,6 +234,63 @@ export default async function RunDetailPage({ params }: Params) {
               })}
             </TableBody>
           </Table>
+          {forceDraftCandidates.length > 0 ? (
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-medium">未生成开发信的客户</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  这些客户通常因为 low / skip / 无邮箱被自动跳过。你可以手动强制生成草稿，仍需人工审核，不会自动发送。
+                </p>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Buyer Fit</TableHead>
+                    <TableHead>Suggested Action</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {forceDraftCandidates.slice(0, 50).map((company) => {
+                    const email = company.recommendedEmails?.[0] ?? emailByCompanyId.get(company.id);
+                    const disabledReason =
+                      company.status === "blacklist"
+                        ? "黑名单客户不能生成草稿。"
+                        : !email
+                          ? "没有邮箱，不能生成草稿。"
+                          : undefined;
+
+                    return (
+                      <TableRow key={company.id}>
+                        <TableCell>
+                          <Link className="font-medium text-primary" href={`/companies/${company.id}`}>
+                            {company.name}
+                          </Link>
+                        </TableCell>
+                        <TableCell>{labelValue(company.buyerFitTier ?? "unknown", buyerFitLabels)}</TableCell>
+                        <TableCell>{labelValue(company.suggestedAction, suggestedActionLabels)}</TableCell>
+                        <TableCell>{email ?? "-"}</TableCell>
+                        <TableCell>
+                          <ForceEmailDraftButton
+                            companyId={company.id}
+                            disabledReason={disabledReason}
+                            label="生成草稿"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              {forceDraftCandidates.length > 50 ? (
+                <p className="text-xs text-muted-foreground">
+                  这里只显示前 50 个未生成草稿的客户，更多客户可在客户详情页生成。
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>
@@ -205,7 +338,7 @@ function KeywordGroup({
                 </span>
               </div>
               <div className="mt-2 text-xs leading-5 text-muted-foreground">
-                {keyword.reason ?? "Mock keyword reason pending."}
+                {keyword.reason ?? "Keyword reason pending."}
               </div>
             </div>
           ))

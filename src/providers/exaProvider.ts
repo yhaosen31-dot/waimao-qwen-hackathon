@@ -1,4 +1,6 @@
 import { envFlag, type ExternalProvider, type ProviderFactoryOptions } from "@/providers/types";
+import { fetchWithTimeout } from "@/providers/providerFetch";
+import { normalizeEmail } from "@/services/contactNormalizeService";
 import type { ContactSearchResult, SearchProviderName, SearchResult } from "@/types";
 
 export interface CompanyWebsiteSearchInput {
@@ -37,12 +39,15 @@ export function createExaProvider(options: ProviderFactoryOptions = {}): ExaProv
   let lastError: string | undefined;
 
   async function runSearch(query: string, fallbackUrl?: string): Promise<SearchResult[]> {
+    void fallbackUrl;
+
     if (mode !== "real" || !isConfigured) {
-      return mockSearchResults("exa", query, fallbackUrl);
+      lastError = "EXA is not configured.";
+      return [];
     }
 
     try {
-      const response = await fetch("https://api.exa.ai/search", {
+      const response = await fetchWithTimeout(resolveProviderEndpoint(process.env.EXA_BASE_URL, "https://api.exa.ai", "search"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -84,7 +89,7 @@ export function createExaProvider(options: ProviderFactoryOptions = {}): ExaProv
         }));
     } catch (error) {
       lastError = error instanceof Error ? error.message : "Unknown EXA error";
-      return mockSearchResults("exa", query, fallbackUrl, lastError);
+      return [];
     }
   }
 
@@ -140,27 +145,12 @@ export function mockSearchResults(
   fallbackUrl?: string,
   fallbackReason?: string
 ): SearchResult[] {
-  const domain =
-    fallbackUrl?.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] ??
-    `${query.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 28) || "mock-company"}.com`;
-  const url = fallbackUrl ?? `https://www.${domain}`;
+  void provider;
+  void query;
+  void fallbackUrl;
+  void fallbackReason;
 
-  return [
-    {
-      title: `Mock ${provider.toUpperCase()} result for ${query}`,
-      url,
-      snippet:
-        fallbackReason ??
-        `Mock search result for ${query}. Contact: procurement@${domain}, phone +1 7000000001, WhatsApp +17000000001, LinkedIn https://linkedin.com/company/${domain.split(".")[0]}.`,
-      sourceProvider: "mock",
-      confidence: 0.72,
-      raw: {
-        provider,
-        mode: "mock",
-        fallbackReason
-      }
-    }
-  ];
+  return [];
 }
 
 export function extractContactResults(results: SearchResult[]): ContactSearchResult[] {
@@ -171,12 +161,16 @@ export function extractContactResults(results: SearchResult[]): ContactSearchRes
     const phoneMatches = text.match(/(?:\+\d{1,3}[\s-]?)?(?:\(?\d{2,4}\)?[\s-]?)?\d{3,4}[\s-]?\d{4,}/g) ?? [];
 
     for (const email of new Set(emailMatches)) {
-      contacts.push(toContact("email", email, result));
+      const normalizedEmail = normalizeEmail(email);
+      if (!normalizedEmail) continue;
+      contacts.push(toContact("email", normalizedEmail, result));
     }
     for (const phone of new Set(phoneMatches)) {
       const normalized = phone.replace(/\s+/g, " ").trim();
+      const digits = normalized.replace(/[^\d]/g, "");
+      if (/(\d)\1{6,}/.test(digits) || /^(1234567|0123456)/.test(digits)) continue;
       contacts.push(toContact("phone", normalized, result));
-      if (/whatsapp|wa\.me/i.test(text) || normalized.startsWith("+")) {
+      if (/whatsapp|wa\.me/i.test(text)) {
         contacts.push(toContact("whatsapp", normalized.replace(/[^\d+]/g, ""), result));
       }
     }
@@ -207,6 +201,21 @@ function toContact(
 function clampConfidence(value: number) {
   if (value > 1) return Math.min(0.98, value / 10);
   return Math.max(0.5, Math.min(0.98, value));
+}
+
+export function resolveProviderEndpoint(
+  configuredBaseUrl: string | undefined,
+  fallbackBaseUrl: string,
+  endpoint: string
+) {
+  const url = new URL((configuredBaseUrl?.trim() || fallbackBaseUrl).replace(/\/$/, ""));
+  const normalizedEndpoint = endpoint.replace(/^\//, "");
+
+  if (!url.pathname.replace(/\/$/, "").endsWith(`/${normalizedEndpoint}`)) {
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/${normalizedEndpoint}`;
+  }
+
+  return url.toString();
 }
 
 export const exaProvider = createExaProvider();

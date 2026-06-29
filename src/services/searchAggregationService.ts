@@ -1,19 +1,29 @@
-import { exaProvider, type CompanyContactSearchInput, type CompanyWebsiteSearchInput } from "@/providers/exaProvider";
-import { tavilyProvider } from "@/providers/tavilyProvider";
-import { youProvider } from "@/providers/youProvider";
+import type { CompanyContactSearchInput, CompanyWebsiteSearchInput } from "@/providers/exaProvider";
+import { minimaxProvider } from "@/providers/minimaxProvider";
+import { searchProviderRouter } from "@/services/searchProviderRouter";
+import { discoverPublicWebsiteWhatsapps } from "@/services/whatsappDiscoveryService";
 import type { ContactSearchResult, SearchResult } from "@/types";
 
-const providers = [exaProvider, tavilyProvider, youProvider];
+export interface AggregatedWebsiteWhatsapp {
+  type: "whatsapp";
+  value: string;
+  sourceUrl: string;
+  sourceProvider: "website_search";
+  confidence: number;
+  evidenceText: string;
+  raw?: unknown;
+}
 
 export interface SearchAggregationResult {
   websiteCandidates: SearchResult[];
   contacts: ContactSearchResult[];
   phones: ContactSearchResult[];
   whatsapps: ContactSearchResult[];
+  websiteWhatsapps: AggregatedWebsiteWhatsapp[];
   linkedins: ContactSearchResult[];
   facebooks: ContactSearchResult[];
   evidence: Array<{
-    type: "website_mock" | "website_search" | "whatsapp_mock" | "contact_search";
+    type: "website_search" | "email_search" | "phone_search" | "whatsapp_search" | "social_search";
     title: string;
     url?: string;
     snippet: string;
@@ -28,15 +38,14 @@ export interface SearchAggregationResult {
 
 export const searchAggregationService = {
   async searchCompanyWebsite(input: CompanyWebsiteSearchInput): Promise<SearchAggregationResult> {
-    const settled = await Promise.allSettled(
-      providers.map((provider) => provider.searchCompanyWebsite(input))
-    );
-    const errors = [...collectProviderErrors(settled, "website"), ...providerFallbackErrors()];
-    const websiteCandidates = dedupeSearchResults(settled.flatMap(valueOrEmpty)).sort(
+    const routed = await runWebsiteSearch(input);
+    const websiteCandidates = dedupeSearchResults(
+      routed.websiteResults.filter((result) => result.sourceProvider !== "mock")
+    ).sort(
       (a, b) => b.confidence - a.confidence
     );
     const evidence = websiteCandidates.map((result) => ({
-      type: result.sourceProvider === "mock" ? ("website_mock" as const) : ("website_search" as const),
+      type: "website_search" as const,
       title: `Website candidate from ${result.sourceProvider}`,
       url: result.url,
       snippet: result.snippet,
@@ -51,111 +60,261 @@ export const searchAggregationService = {
       contacts: [],
       phones: [],
       whatsapps: [],
+      websiteWhatsapps: [],
       linkedins: [],
       facebooks: [],
       evidence,
-      errors,
+      errors: routed.errors,
       mode: aggregateMode()
     };
   },
 
   async searchCompanyContacts(input: CompanyContactSearchInput): Promise<SearchAggregationResult> {
-    const [contactsSettled, whatsappSettled, socialSettled] = await Promise.all([
-      Promise.allSettled(providers.map((provider) => provider.searchCompanyContacts(input))),
-      Promise.allSettled(providers.map((provider) => provider.searchWhatsapp(input))),
-      Promise.allSettled(
-        providers.map((provider) =>
-          provider.searchLinkedinFacebook({
-            companyName: input.companyName,
-            country: input.country
-          })
-        )
-      )
+    const [routed, publicWebsiteWhatsapps] = await Promise.all([
+      runContactSearch(input),
+      discoverPublicWebsiteWhatsapps({
+        companyName: input.companyName,
+        country: input.country,
+        website: input.website
+      })
     ]);
-    const contacts = dedupeContacts([
-      ...contactsSettled.flatMap(valueOrEmpty),
-      ...whatsappSettled.flatMap(valueOrEmpty),
-      ...socialSettled.flatMap(valueOrEmpty)
-    ]).sort((a, b) => b.confidence - a.confidence);
-    const evidence = contacts.map((contact) => ({
-      type:
-        contact.type === "whatsapp" && contact.sourceProvider === "mock"
-          ? ("whatsapp_mock" as const)
-          : ("contact_search" as const),
-      title: `${contact.type} candidate from ${contact.sourceProvider}`,
-      url: contact.sourceUrl,
-      snippet: contact.evidenceText,
-      rawText: `${contact.type}: ${contact.value}. ${contact.evidenceText}`,
-      confidence: contact.confidence,
-      source: contact.sourceProvider,
-      raw: contact.raw
+    const contacts = dedupeContacts(
+      routed.contactResults.filter((result) => result.sourceProvider !== "mock")
+    ).sort((a, b) => b.confidence - a.confidence);
+    const websiteWhatsapps: AggregatedWebsiteWhatsapp[] = publicWebsiteWhatsapps.map((candidate) => ({
+      type: "whatsapp",
+      value: candidate.number,
+      sourceUrl: candidate.sourceUrl,
+      sourceProvider: "website_search",
+      confidence: candidate.confidence,
+      evidenceText: candidate.evidenceText,
+      raw: candidate
     }));
+    const evidence = [
+      ...contacts.map((contact) => ({
+        type: contactEvidenceType(contact.type),
+        title: `${contact.type} candidate from ${contact.sourceProvider}`,
+        url: contact.sourceUrl,
+        snippet: contact.evidenceText,
+        rawText: `${contact.type}: ${contact.value}. ${contact.evidenceText}`,
+        confidence: contact.confidence,
+        source: contact.sourceProvider,
+        raw: contact.raw
+      })),
+      ...websiteWhatsapps.map((candidate) => ({
+        type: "whatsapp_search" as const,
+        title: "WhatsApp candidate from public website",
+        url: candidate.sourceUrl,
+        snippet: candidate.evidenceText,
+        rawText: `whatsapp: ${candidate.value}. ${candidate.evidenceText}`,
+        confidence: candidate.confidence,
+        source: candidate.sourceProvider,
+        raw: candidate.raw
+      }))
+    ];
 
     return {
       websiteCandidates: [],
       contacts,
       phones: contacts.filter((contact) => contact.type === "phone"),
       whatsapps: contacts.filter((contact) => contact.type === "whatsapp"),
+      websiteWhatsapps,
       linkedins: contacts.filter((contact) => contact.type === "linkedin"),
       facebooks: contacts.filter((contact) => contact.type === "facebook"),
       evidence,
-      errors: [
-        ...collectProviderErrors(contactsSettled, "contacts"),
-        ...collectProviderErrors(whatsappSettled, "whatsapp"),
-        ...collectProviderErrors(socialSettled, "social"),
-        ...providerFallbackErrors()
-      ],
+      errors: routed.errors,
       mode: aggregateMode()
     };
   },
 
   statuses() {
-    return Object.fromEntries(
-      providers.map((provider) => {
-        const status = provider.status();
-
-        return [
-          provider.name,
-          {
-            configured: status.configured,
-            ok: !status.lastError,
-            mode: status.mode,
-            lastError: status.lastError
-          }
-        ];
-      })
-    );
+    return searchProviderRouter.statuses();
   },
 
   async testProviders() {
-    await Promise.allSettled(
-      providers.map((provider) =>
-        provider.searchCompanyWebsite({
-          companyName: "diaphragm accumulator",
-          sourceKeyword: "diaphragm accumulator"
-        })
-      )
-    );
+    await searchProviderRouter.search({
+      query: "diaphragm accumulator official website",
+      searchType: "website",
+      mode: "economy",
+      websiteInput: {
+        companyName: "diaphragm accumulator",
+        sourceKeyword: "diaphragm accumulator"
+      }
+    });
 
     return this.statuses();
   }
 };
 
-function valueOrEmpty<T>(settled: PromiseSettledResult<T[]>): T[] {
-  return settled.status === "fulfilled" ? settled.value : [];
-}
-
-function collectProviderErrors<T>(settled: PromiseSettledResult<T[]>[], area: string) {
-  return settled.flatMap((item) =>
-    item.status === "rejected" ? [`${area}: ${item.reason}`] : []
-  );
-}
-
-function providerFallbackErrors() {
-  return providers.flatMap((provider) => {
-    const status = provider.status();
-    return status.lastError ? [`${provider.name}: ${status.lastError}`] : [];
+async function runWebsiteSearch(input: CompanyWebsiteSearchInput) {
+  const fallbackQuery = `${input.companyName} official website ${input.country ?? ""} ${input.sourceKeyword ?? ""}`.trim();
+  const toolSearch = await minimaxProvider.searchWithTools({
+    objective: "Find official website candidates for this company/product-search lead.",
+    context: {
+      companyName: input.companyName,
+      country: input.country,
+      sourceKeyword: input.sourceKeyword
+    },
+    defaultSearchType: "website",
+    mode: "fallback",
+    maxToolCalls: 2,
+    minResults: 1,
+    minConfidence: 0.58
   });
+  const websiteResults = toolSearch.toolCalls.flatMap((call) => call.result.websiteResults);
+
+  if (websiteResults.length > 0) {
+    return {
+      websiteResults,
+      errors: toolSearch.toolCalls.flatMap((call) => [
+        ...call.result.errors,
+        ...call.result.attempts.flatMap((attempt) => attempt.errorMessage ?? [])
+      ])
+    };
+  }
+
+  const routed = await searchProviderRouter.search({
+    query: fallbackQuery,
+    searchType: "website",
+    mode: "fallback",
+    websiteInput: input,
+    minResults: 1,
+    minConfidence: 0.58
+  });
+
+  return {
+    websiteResults: routed.websiteResults,
+    errors: [
+      ...routed.errors,
+      ...routed.attempts.flatMap((attempt) => attempt.errorMessage ?? []),
+      ...(toolSearch.fallbackReason ? [toolSearch.fallbackReason] : [])
+    ]
+  };
+}
+
+function contactEvidenceType(type: ContactSearchResult["type"]) {
+  if (type === "email") return "email_search" as const;
+  if (type === "phone") return "phone_search" as const;
+  if (type === "whatsapp") return "whatsapp_search" as const;
+  if (type === "linkedin" || type === "facebook") return "social_search" as const;
+  return "phone_search" as const;
+}
+
+async function runContactSearch(input: CompanyContactSearchInput) {
+  const toolSearch = await minimaxProvider.searchWithTools({
+    objective: "Find public contact evidence for this company: email, phone, WhatsApp, LinkedIn, and Facebook.",
+    context: {
+      companyName: input.companyName,
+      country: input.country,
+      website: input.website
+    },
+    defaultSearchType: "contact",
+    mode: "fallback",
+    maxToolCalls: 3,
+    minResults: 1,
+    minConfidence: 0.5
+  });
+  const contactResults: ContactSearchResult[] = [
+    ...toolSearch.toolCalls.flatMap((call) => call.result.contactResults)
+  ];
+  const errors = toolSearch.toolCalls.flatMap((call) => [
+    ...call.result.errors,
+    ...call.result.attempts.flatMap((attempt) => attempt.errorMessage ?? [])
+  ]);
+
+  for (const query of buildAggregationContactQueries(input)) {
+    if (hasEnoughAggregationContacts(contactResults)) break;
+
+    const routed = await searchProviderRouter.search({
+      query: query.query,
+      searchType: query.searchType,
+      mode: "fallback",
+      contactInput: input,
+      minResults: query.minResults,
+      minConfidence: query.minConfidence
+    });
+    contactResults.push(...routed.contactResults);
+    errors.push(
+      ...routed.errors,
+      ...routed.attempts.flatMap((attempt) => attempt.errorMessage ?? [])
+    );
+  }
+
+  return {
+    contactResults: dedupeContacts(contactResults),
+    errors: [
+      ...errors,
+      ...(toolSearch.fallbackReason ? [toolSearch.fallbackReason] : [])
+    ]
+  };
+}
+
+function buildAggregationContactQueries(input: CompanyContactSearchInput) {
+  const domain = input.website?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0];
+  const queries = [
+    {
+      query: `${input.companyName} contact email phone ${input.country ?? ""}`.trim(),
+      searchType: "contact" as const,
+      minResults: 1,
+      minConfidence: 0.55
+    },
+    {
+      query: `${input.companyName} procurement purchasing sourcing email ${input.country ?? ""}`.trim(),
+      searchType: "email" as const,
+      minResults: 0,
+      minConfidence: 0.5
+    },
+    {
+      query: `${input.companyName} compras ventas email contacto ${input.country ?? ""}`.trim(),
+      searchType: "email" as const,
+      minResults: 0,
+      minConfidence: 0.5
+    },
+    {
+      query: `${input.companyName} WhatsApp phone contact ${input.country ?? ""}`.trim(),
+      searchType: "whatsapp" as const,
+      minResults: 0,
+      minConfidence: 0.5
+    },
+    {
+      query: `${input.companyName} WhatsApp ventas compras ${input.country ?? ""}`.trim(),
+      searchType: "whatsapp" as const,
+      minResults: 0,
+      minConfidence: 0.5
+    },
+    {
+      query: `${input.companyName} LinkedIn Facebook ${input.country ?? ""}`.trim(),
+      searchType: "social" as const,
+      minResults: 0,
+      minConfidence: 0.5
+    }
+  ];
+
+  if (!domain) return queries;
+
+  return [
+    {
+      query: `${domain} contact email`,
+      searchType: "email" as const,
+      minResults: 0,
+      minConfidence: 0.5
+    },
+    {
+      query: `site:${domain} contact email`,
+      searchType: "email" as const,
+      minResults: 0,
+      minConfidence: 0.5
+    },
+    ...queries
+  ];
+}
+
+function hasEnoughAggregationContacts(contactResults: ContactSearchResult[]) {
+  const hasEmail = contactResults.some((result) => result.type === "email");
+  const hasWhatsapp = contactResults.some((result) => result.type === "whatsapp");
+  const hasSocial = contactResults.some((result) => result.type === "linkedin" || result.type === "facebook");
+
+  return hasEmail && hasWhatsapp && hasSocial;
 }
 
 function dedupeSearchResults(results: SearchResult[]) {
@@ -185,7 +344,8 @@ function normalizeUrl(url: string) {
 }
 
 function aggregateMode(): "mock" | "real" | "mixed" {
-  const modes = providers.map((provider) => provider.status().mode);
+  const statuses = Object.values(searchProviderRouter.statuses());
+  const modes = statuses.map((status) => status.mode);
   if (modes.every((mode) => mode === "mock")) return "mock";
   if (modes.every((mode) => mode === "real")) return "real";
   return "mixed";

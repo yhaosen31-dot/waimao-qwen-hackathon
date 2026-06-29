@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { z } from "zod";
-import { listRuns } from "@/lib/store";
-import { startMockLeadRun } from "@/lib/run-workflow";
+import { listRuns } from "@/repositories/store";
 
 export const runtime = "nodejs";
 
@@ -16,11 +15,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const payload = createRunSchema.parse(await request.json());
-  const results = await startMockLeadRun(payload);
+  createRunSchema.parse(await request.json());
 
-  return NextResponse.json({
-    runId: results?.run.id,
-    results
-  });
+  return NextResponse.json(
+    {
+      ok: false,
+      message: "Legacy demo run API is disabled. Use /api/runs/start for product search."
+    },
+    { status: 410 }
+  );
 }

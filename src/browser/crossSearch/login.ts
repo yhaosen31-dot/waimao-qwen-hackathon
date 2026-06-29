@@ -1,3 +1,4 @@
+// Disabled legacy connector: retained for reference only. Current providers and APIs must not import or run this module.
 import type { Page } from "playwright";
 import { detectHumanChallenge, inspectCrossSearchPage } from "@/browser/crossSearch/checkLogin";
 import { ensureCrossSearchPage, getCrossSearchSession } from "@/browser/crossSearch/session";

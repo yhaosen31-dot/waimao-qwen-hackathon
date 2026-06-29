@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { getEmailDraft, readStore } from "@/lib/store";
+﻿import { NextResponse } from "next/server";
+import { getEmailDraft, readCrmStore } from "@/repositories/store";
 
 export const runtime = "nodejs";
 
@@ -11,7 +11,7 @@ interface Params {
 
 export async function GET(_request: Request, { params }: Params) {
   const { draftId } = await params;
-  const [draft, db] = await Promise.all([getEmailDraft(draftId), readStore()]);
+  const [draft, db] = await Promise.all([getEmailDraft(draftId), readCrmStore()]);
 
   if (!draft) {
     return NextResponse.json({ error: "Email draft not found" }, { status: 404 });

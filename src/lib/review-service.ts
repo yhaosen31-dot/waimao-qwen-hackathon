@@ -1,16 +1,17 @@
-import { runLeadGenerationGraphFromState } from "@/graphs/leadGenerationGraph";
+﻿import { runLeadGenerationGraphFromState } from "@/graphs/leadGenerationGraph";
 import { persistGraphRunState } from "@/graphs/persistGraphRunState";
-import { createInitialLeadGenerationState } from "@/graphs/state";
+import { addLeadJob } from "@/queue/leadQueue";
+import { createInitialLeadGenerationState, type SearchProviderPreference } from "@/graphs/state";
 import {
   getRunResults,
   readStore,
+  saveKeywords,
   updateCompany,
-  updateCompaniesForRun,
   updateEmailDraft,
   updateRun,
   updateRunStep
-} from "@/lib/store";
-import type { EmailDraft, EmailDraftStatus, EntityId, RunResults } from "@/types";
+} from "@/repositories/store";
+import type { EmailDraft, EmailDraftStatus, EntityId, RunResults, SearchMode } from "@/types";
 
 export interface EmailDraftDecisionInput {
   draftId: EntityId;
@@ -33,27 +34,95 @@ export async function approveKeywordsForRun(runId: EntityId, keywordIds: EntityI
     throw new Error("Select at least one keyword");
   }
 
-  const graphState = await runLeadGenerationGraphFromState({
-    ...createInitialLeadGenerationState({
-      runId,
-      productInput: results.run.productInput,
-      targetCount: results.run.targetCustomerCount
-    }),
-    normalizedProduct: results.run.normalizedProduct,
-    keywords: results.keywords.map((keyword) => keyword.value),
-    keywordInsights: results.keywords.map((keyword) => ({
-      value: keyword.value,
-      score: keyword.confidence ?? 0.9,
-      reason: keyword.reason ?? "Mock keyword generated for importer discovery."
-    })),
-    approvedKeywords
+  await saveKeywords(
+    runId,
+    results.keywords.map((keyword) => ({
+      ...keyword,
+      status: selectedIds.has(keyword.id) ? ("approved" as const) : ("rejected" as const)
+    }))
+  );
+  await updateRunStep(runId, "humanApproveKeywords", {
+    status: "completed",
+    summary: `Approved ${approvedKeywords.length} keywords. Product search is running in the background.`,
+    completedAt: new Date().toISOString()
+  });
+  await updateRunStep(runId, "searchCustomersByProduct", {
+    status: "running",
+    summary: "Running MiniMax tool-use product search through SearchProviderRouter.",
+    startedAt: new Date().toISOString()
+  });
+  await updateRun(runId, {
+    keywordReviewStatus: "approved",
+    status: "running",
+    currentStep: "searchCustomersByProduct"
   });
 
-  await persistGraphRunState(graphState, {
-    runStatus: "waiting_review"
+  const queueResult = await addLeadJob({
+    type: "product_search",
+    runId,
+    source: "product_search",
+    options: {
+      phase: "after_keyword_approval",
+      approvedKeywords,
+      productInput: results.run.productInput,
+      targetCount: results.run.targetCustomerCount,
+      targetCountries: metadataStringArray(results.run.metadata?.targetCountries),
+      excludedCountries: metadataStringArray(results.run.metadata?.excludedCountries),
+      searchMode: metadataSearchMode(results.run.metadata?.searchMode),
+      providerPriority: metadataProviderPriority(results.run.metadata?.providerPriority)
+    }
   });
+
+  if (!queueResult.queued) {
+    void continueRunAfterKeywordApproval(runId, approvedKeywords);
+  }
 
   return getRunResults(runId);
+}
+
+async function continueRunAfterKeywordApproval(runId: EntityId, approvedKeywords: string[]) {
+  try {
+    const results = await getRunResults(runId);
+    if (!results) throw new Error("Run not found");
+
+    const graphState = await runLeadGenerationGraphFromState({
+      ...createInitialLeadGenerationState({
+        runId,
+        productInput: results.run.productInput,
+        targetCount: results.run.targetCustomerCount,
+        targetCountries: metadataStringArray(results.run.metadata?.targetCountries),
+        excludedCountries: metadataStringArray(results.run.metadata?.excludedCountries),
+        searchMode: metadataSearchMode(results.run.metadata?.searchMode),
+        providerPriority: metadataProviderPriority(results.run.metadata?.providerPriority)
+      }),
+      normalizedProduct: results.run.normalizedProduct,
+      keywords: results.keywords.map((keyword) => keyword.value),
+      keywordInsights: results.keywords.map((keyword) => ({
+        value: keyword.value,
+        score: keyword.confidence ?? 0.9,
+        reason: keyword.reason ?? "MiniMax keyword generated for importer discovery."
+      })),
+      approvedKeywords
+    });
+
+    await persistGraphRunState(graphState, {
+      runStatus: "waiting_review"
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown background lead generation error.";
+    await updateRunStep(runId, "searchCustomersByProduct", {
+      status: "failed",
+      summary: message,
+      completedAt: new Date().toISOString()
+    });
+    await updateRun(runId, {
+      status: "failed",
+      currentStep: "searchCustomersByProduct",
+      metadata: {
+        backgroundError: message
+      }
+    });
+  }
 }
 
 export async function applyEmailDraftDecision(input: EmailDraftDecisionInput) {
@@ -107,9 +176,6 @@ export async function finalizeRunIfAllEmailReviewed(runId: EntityId): Promise<Ru
     status: "completed",
     summary: `Saved ${results.companies.length} companies and ${results.emailDrafts.length} reviewed drafts to local CRM.`
   });
-  await updateCompaniesForRun(runId, () => ({
-    status: "saved_to_crm"
-  }));
   await updateRun(runId, {
     status: "completed",
     currentStep: "saveToCrm",
@@ -124,6 +190,9 @@ async function updateDraftForDecision(input: EmailDraftDecisionInput) {
   const draft = results.emailDrafts.find((item) => item.id === input.draftId);
 
   if (!draft) throw new Error("Email draft not found");
+  if (draft.status === "sent") {
+    throw new Error("Sent email drafts cannot be changed.");
+  }
 
   const now = new Date().toISOString();
   const subject = input.subject ?? draft.subject;
@@ -140,6 +209,24 @@ async function updateDraftForDecision(input: EmailDraftDecisionInput) {
     skippedAt: status === "skipped" ? now : draft.skippedAt,
     editedAt: wasEdited || status === "draft" ? now : draft.editedAt
   });
+}
+
+function metadataStringArray(value: unknown) {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+function metadataSearchMode(value: unknown): SearchMode {
+  const mode = String(value ?? "fallback");
+  return mode === "economy" || mode === "fallback" || mode === "deep_verify" ? mode : "fallback";
+}
+
+function metadataProviderPriority(value: unknown): SearchProviderPreference[] {
+  const providers = metadataStringArray(value).filter(isSearchProviderPreference);
+  return providers.length > 0 ? providers : (["exa"] satisfies SearchProviderPreference[]);
+}
+
+function isSearchProviderPreference(value: string): value is SearchProviderPreference {
+  return value === "exa" || value === "tavily" || value === "you";
 }
 
 async function syncCompanyStatusFromDraft(draft: EmailDraft) {

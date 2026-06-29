@@ -5,7 +5,7 @@ export class KjingPlaywrightImporterSearchProvider implements ImporterSearchProv
     void keywords;
     void targetCount;
     throw new Error(
-      "KJing Playwright automation is reserved for a later milestone and is not enabled in the MVP."
+      "KJing/Cross-search Playwright automation is disabled because account risk control was detected."
     );
   }
 }

@@ -47,7 +47,7 @@ export default async function CustomerDetailPage({ params }: Params) {
           <Card>
             <CardHeader>
               <CardTitle>Buyer fit</CardTitle>
-              <CardDescription>Mock scoring from product overlap and buyer profile.</CardDescription>
+              <CardDescription>Scoring from product overlap, buyer profile, and saved evidence.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-3">

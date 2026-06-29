@@ -1,10 +1,11 @@
 import {
   extractContactResults,
-  mockSearchResults,
+  resolveProviderEndpoint,
   type CompanyContactSearchInput,
   type CompanyWebsiteSearchInput,
   type SearchProviderMethods
 } from "@/providers/exaProvider";
+import { fetchWithTimeout } from "@/providers/providerFetch";
 import { envFlag, type ExternalProvider, type ProviderFactoryOptions } from "@/providers/types";
 import type { ContactSearchResult, SearchResult } from "@/types";
 
@@ -17,16 +18,22 @@ export function createYouProvider(options: ProviderFactoryOptions = {}): YouProv
   let lastError: string | undefined;
 
   async function runSearch(query: string, fallbackUrl?: string): Promise<SearchResult[]> {
+    void fallbackUrl;
+
     if (mode !== "real" || !isConfigured) {
-      return mockSearchResults("you", query, fallbackUrl);
+      lastError = "YOU is not configured.";
+      return [];
     }
 
     try {
-      const url = new URL("https://api.you.com/v1/search");
+      const endpoint = process.env.YOU_BASE_URL?.includes("ydc-index.io") ? "v1/search" : "search";
+      const url = new URL(
+        resolveProviderEndpoint(process.env.YOU_BASE_URL, "https://api.you.com/v1", endpoint)
+      );
       url.searchParams.set("query", query);
       url.searchParams.set("count", "5");
 
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         headers: {
           "X-API-Key": process.env.YOU_API_KEY ?? ""
         }
@@ -51,7 +58,7 @@ export function createYouProvider(options: ProviderFactoryOptions = {}): YouProv
       }));
     } catch (error) {
       lastError = error instanceof Error ? error.message : "Unknown YOU error";
-      return mockSearchResults("you", query, fallbackUrl, lastError);
+      return [];
     }
   }
 

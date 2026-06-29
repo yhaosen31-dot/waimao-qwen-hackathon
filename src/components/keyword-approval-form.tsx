@@ -46,7 +46,10 @@ export function KeywordApprovalForm({
         })
       });
 
-      if (!response.ok) throw new Error("Failed to approve keywords.");
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "关键词确认失败，请稍后重试。");
+      }
 
       router.push(`/runs/${runId}`);
       router.refresh();
@@ -85,11 +88,11 @@ export function KeywordApprovalForm({
       </div>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-muted-foreground">
-          {selectedCount} keyword{selectedCount === 1 ? "" : "s"} selected
+          已选择 {selectedCount} 个关键词
         </p>
         <Button disabled={isSubmitting || selectedCount === 0} onClick={approve}>
           {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-          Confirm keywords and continue
+          确认关键词并继续
         </Button>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

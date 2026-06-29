@@ -1,4 +1,10 @@
-import { completeNode, leadGenerationNodeLabels, type LeadGenerationGraphState } from "@/graphs/state";
+﻿import {
+  completeNode,
+  leadGenerationNodeLabels,
+  type GraphCompany,
+  type GraphEmailDraft,
+  type LeadGenerationGraphState
+} from "@/graphs/state";
 import {
   saveCompanies,
   saveContacts,
@@ -10,8 +16,10 @@ import {
   saveWhatsappNumbers,
   updateRun,
   updateRunStep
-} from "@/lib/store";
+} from "@/repositories/store";
 import type {
+  CompanyStatus,
+  EvidenceProvider,
   SaveCompanyInput,
   SaveContactInput,
   SaveEmailAddressInput,
@@ -40,12 +48,12 @@ export async function saveToCrm(state: LeadGenerationGraphState) {
       return {
         value: keyword,
         language: "en" as const,
-        source: "mock" as const,
+        source: "llm" as const,
         status: state.approvedKeywords.includes(keyword)
           ? ("approved" as const)
           : ("rejected" as const),
         confidence: insight?.score ?? 0.9,
-        reason: insight?.reason ?? "Mock keyword generated for importer discovery.",
+        reason: insight?.reason ?? "MiniMax keyword generated for importer discovery.",
         evidenceIds: []
       };
     })
@@ -55,7 +63,7 @@ export async function saveToCrm(state: LeadGenerationGraphState) {
     company.evidence.map((item, index) => ({
       id: `${company.id}_evidence_${index + 1}`,
       companyId: company.id,
-      provider: "mock",
+      provider: providerFromGraphEvidence(item),
       type: item.type,
       source: item.source ?? item.type,
       title: item.title,
@@ -85,13 +93,24 @@ export async function saveToCrm(state: LeadGenerationGraphState) {
       reasons: company.buyerFitReasons,
       confidence: company.confidence ?? 0.8
     },
+    buyerFitTier: company.buyerFitTier,
+    companyRole: company.companyRole,
     buyerFitScore: company.buyerFitScore ?? 0,
     buyerFitReasons: company.buyerFitReasons,
+    buyerFitRisks: company.buyerFitRisks,
     leadScore: company.leadScore ?? company.buyerFitScore ?? 0,
     confidence: company.confidence ?? 0.8,
+    suggestedAction: company.suggestedAction,
     sourceKeyword: company.sourceKeyword,
-    status: "saved_to_crm",
-    source: "mock",
+    sourceQuery: company.sourceQuery,
+    sourceProvider: company.sourceProvider,
+    enrichmentStatus: company.enrichmentStatus,
+    websiteStatus: company.websiteStatus,
+    contactStatus: company.contactStatus,
+    contactConfidence: company.contactConfidence,
+    evidenceSummary: company.evidenceSummary,
+    status: resolveSavedCompanyStatus(company, nextState.emailDrafts),
+    source: companySource(company),
     evidenceIds: evidence.filter((item) => item.companyId === company.id).map((item) => item.id),
     emailDraftIds: nextState.emailDrafts
       .filter((draft) => draft.companyId === company.id)
@@ -105,10 +124,10 @@ export async function saveToCrm(state: LeadGenerationGraphState) {
     return {
       id: `${company.id}_contact_1`,
       companyId: company.id,
-      fullName: graphCompany?.contactName ?? "Mock Procurement Manager",
+      fullName: graphCompany?.contactName ?? "Procurement Contact",
       title: graphCompany?.contactTitle ?? "Procurement Manager",
       department: "Procurement",
-      source: "mock",
+      source: sourceForGraphCompany(graphCompany),
       confidence: 0.8,
       evidenceIds: company.evidenceIds
     };
@@ -125,7 +144,7 @@ export async function saveToCrm(state: LeadGenerationGraphState) {
       contactId: index === 0 ? contact?.id : undefined,
       email,
       domain: company.domain ?? email.split("@")[1] ?? "",
-      source: "mock",
+      source: sourceForGraphCompany(graphCompany),
       confidence: index === 0 ? 0.9 : 0.75,
       verificationStatus: "unverified" as const,
       evidenceIds: company.evidenceIds
@@ -133,20 +152,24 @@ export async function saveToCrm(state: LeadGenerationGraphState) {
   });
   const emails = await saveEmailAddresses(state.runId, emailInputs);
 
-  const whatsappInputs: SaveWhatsappNumberInput[] = companies.map((company) => {
+  const whatsappInputs: SaveWhatsappNumberInput[] = companies.flatMap((company) => {
     const graphCompany = nextState.companies.find((item) => item.id === company.id);
     const contact = contacts.find((item) => item.companyId === company.id);
+    const whatsapp = graphCompany?.whatsapp?.trim();
 
-    return {
-      id: `${company.id}_whatsapp_1`,
-      companyId: company.id,
-      contactId: contact?.id,
-      number: graphCompany?.whatsapp ?? "+17000000000",
-      countryCode: "1",
-      source: "mock",
-      confidence: 0.78,
-      evidenceIds: company.evidenceIds
-    };
+    if (!whatsapp) return [];
+
+    return [
+      {
+        id: `${company.id}_whatsapp_1`,
+        companyId: company.id,
+        contactId: contact?.id,
+        number: whatsapp,
+        source: sourceForGraphCompany(graphCompany),
+        confidence: 0.78,
+        evidenceIds: company.evidenceIds
+      }
+    ];
   });
   await saveWhatsappNumbers(state.runId, whatsappInputs);
 
@@ -206,4 +229,55 @@ export async function saveToCrm(state: LeadGenerationGraphState) {
   });
 
   return completed;
+}
+
+function resolveSavedCompanyStatus(
+  company: GraphCompany,
+  emailDrafts: GraphEmailDraft[]
+): CompanyStatus {
+  const draft = emailDrafts.find((item) => item.companyId === company.id);
+  if (draft?.status === "approved") return "email_approved";
+  if (draft?.status === "skipped") return "email_skipped";
+  if (draft) return "drafted";
+  if (company.buyerFitTier) return "scored";
+  if (company.enrichmentStatus === "completed" || company.enrichmentStatus === "needs_review") {
+    return "enriched";
+  }
+  return company.status ?? "product_search_candidate";
+}
+
+function companySource(company: GraphCompany): EvidenceProvider {
+  return company.evidence.some((item) => item.type === "product_search") ? "product_search" : "manual";
+}
+
+function sourceForGraphCompany(company: GraphCompany | undefined): EvidenceProvider {
+  if (!company) return "manual";
+  const searchEvidence = company.evidence.find((item) => providerFromSource(item.source) !== "mock");
+  if (searchEvidence) return providerFromSource(searchEvidence.source);
+  return companySource(company);
+}
+
+function providerFromGraphEvidence(item: GraphCompany["evidence"][number]): EvidenceProvider {
+  if (item.type === "buyer_fit") return "minimax";
+  return providerFromSource(item.source) ?? (item.type === "product_search" ? "product_search" : "manual");
+}
+
+function providerFromSource(value: string | undefined): EvidenceProvider {
+  if (
+    value === "excel_import" ||
+    value === "product_search" ||
+    value === "cross_border_search" ||
+    value === "website_search" ||
+    value === "foreign_trade_email" ||
+    value === "exa" ||
+    value === "tavily" ||
+    value === "you" ||
+    value === "minimax" ||
+    value === "manual" ||
+    value === "mock"
+  ) {
+    return value;
+  }
+
+  return "manual";
 }

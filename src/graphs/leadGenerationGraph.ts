@@ -2,16 +2,19 @@ import { END, START, StateGraph } from "@langchain/langgraph";
 import {
   createInitialLeadGenerationState,
   LeadGenerationAnnotation,
-  type LeadGenerationState
+  type LeadGenerationState,
+  type SearchProviderPreference
 } from "@/graphs/state";
+import type { SearchMode } from "@/types";
 import { normalizeInput } from "@/graphs/nodes/normalizeInput";
 import { generateKeywords } from "@/graphs/nodes/generateKeywords";
 import { humanApproveKeywords } from "@/graphs/nodes/humanApproveKeywords";
-import { searchCrossBorderImporters } from "@/graphs/nodes/searchCrossBorderImporters";
+import { searchCustomersByProduct } from "@/graphs/nodes/searchCustomersByProduct";
 import { extractCompanyDetails } from "@/graphs/nodes/extractCompanyDetails";
+import { enrichCompanies } from "@/graphs/nodes/enrichCompanies";
 import { discoverWebsite } from "@/graphs/nodes/discoverWebsite";
-import { searchEmailsByDomain } from "@/graphs/nodes/searchEmailsByDomain";
-import { discoverWhatsappAndContacts } from "@/graphs/nodes/discoverWhatsappAndContacts";
+import { discoverContacts } from "@/graphs/nodes/discoverContacts";
+import { mergeEvidence } from "@/graphs/nodes/mergeEvidence";
 import { scoreBuyerFit } from "@/graphs/nodes/scoreBuyerFit";
 import { generateEmailDraft } from "@/graphs/nodes/generateEmailDraft";
 import { humanApproveEmail } from "@/graphs/nodes/humanApproveEmail";
@@ -22,11 +25,12 @@ export function createLeadGenerationGraph() {
     .addNode("normalizeInput", normalizeInput)
     .addNode("generateKeywords", generateKeywords)
     .addNode("humanApproveKeywords", humanApproveKeywords)
-    .addNode("searchCrossBorderImporters", searchCrossBorderImporters)
+    .addNode("searchCustomersByProduct", searchCustomersByProduct)
     .addNode("extractCompanyDetails", extractCompanyDetails)
+    .addNode("enrichCompanies", enrichCompanies)
     .addNode("discoverWebsite", discoverWebsite)
-    .addNode("searchEmailsByDomain", searchEmailsByDomain)
-    .addNode("discoverWhatsappAndContacts", discoverWhatsappAndContacts)
+    .addNode("discoverContacts", discoverContacts)
+    .addNode("mergeEvidence", mergeEvidence)
     .addNode("scoreBuyerFit", scoreBuyerFit)
     .addNode("generateEmailDraft", generateEmailDraft)
     .addNode("humanApproveEmail", humanApproveEmail)
@@ -35,11 +39,12 @@ export function createLeadGenerationGraph() {
     .addEdge("normalizeInput", "generateKeywords")
     .addEdge("generateKeywords", "humanApproveKeywords")
     .addConditionalEdges("humanApproveKeywords", routeAfterKeywordApproval)
-    .addEdge("searchCrossBorderImporters", "extractCompanyDetails")
-    .addEdge("extractCompanyDetails", "discoverWebsite")
-    .addEdge("discoverWebsite", "searchEmailsByDomain")
-    .addEdge("searchEmailsByDomain", "discoverWhatsappAndContacts")
-    .addEdge("discoverWhatsappAndContacts", "scoreBuyerFit")
+    .addEdge("searchCustomersByProduct", "extractCompanyDetails")
+    .addEdge("extractCompanyDetails", "enrichCompanies")
+    .addEdge("enrichCompanies", "discoverWebsite")
+    .addEdge("discoverWebsite", "discoverContacts")
+    .addEdge("discoverContacts", "mergeEvidence")
+    .addEdge("mergeEvidence", "scoreBuyerFit")
     .addEdge("scoreBuyerFit", "generateEmailDraft")
     .addEdge("generateEmailDraft", "humanApproveEmail")
     .addConditionalEdges("humanApproveEmail", routeAfterEmailApproval)
@@ -53,6 +58,10 @@ export async function runLeadGenerationGraph(input: {
   runId: string;
   productInput: string;
   targetCount: number;
+  targetCountries?: string[];
+  excludedCountries?: string[];
+  searchMode?: SearchMode;
+  providerPriority?: SearchProviderPreference[];
 }) {
   const graph = createLeadGenerationGraph();
 
@@ -66,7 +75,7 @@ export async function runLeadGenerationGraphFromState(state: LeadGenerationState
 }
 
 function routeAfterKeywordApproval(state: LeadGenerationState) {
-  return state.approvedKeywords.length > 0 ? "searchCrossBorderImporters" : END;
+  return state.approvedKeywords.length > 0 ? "searchCustomersByProduct" : END;
 }
 
 function routeAfterEmailApproval(state: LeadGenerationState) {

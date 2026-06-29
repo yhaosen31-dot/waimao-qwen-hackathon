@@ -1,12 +1,13 @@
-import { NextResponse } from "next/server";
-import { listEmailDrafts, readStore } from "@/lib/store";
+﻿import { NextResponse } from "next/server";
+import { readCrmStore } from "@/repositories/store";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
-  const [drafts, db] = await Promise.all([listEmailDrafts(), readStore()]);
+  const db = await readCrmStore();
+  const drafts = [...db.emailDrafts].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const hydrated = drafts
     .filter((draft) => (status ? draft.status === status : true))
     .map((draft) => ({

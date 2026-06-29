@@ -3,45 +3,79 @@ import { minimaxProvider } from "@/providers/minimaxProvider";
 
 export async function scoreBuyerFit(state: LeadGenerationGraphState) {
   const companies = await Promise.all(
-    state.companies.map(async (company, index) => {
-      const evidenceSummary = company.evidence
-        .map((item) => `${item.type}: ${item.rawText ?? item.snippet}`)
-        .slice(0, 8)
-        .join("\n");
-      const providerResult = await minimaxProvider.invoke({
-        productName: state.normalizedProduct ?? state.productInput,
+    state.companies.map(async (company) => {
+      if (
+        company.enrichmentStatus &&
+        !["completed", "needs_review"].includes(company.enrichmentStatus)
+      ) {
+        return company;
+      }
+
+      const evidenceSummary =
+        company.evidenceSummary ??
+        company.evidence
+          .map((item) => `${item.type}: ${item.rawText ?? item.snippet}`)
+          .slice(0, 12)
+          .join("\n");
+      const score = await minimaxProvider.scoreBuyerFit({
+        companyId: company.id,
         companyName: company.name,
-        buyerSignals: company.evidence.map((item) => item.snippet).slice(0, 6),
-        evidenceSummary
+        country: company.country,
+        source: "product_search",
+        productName: state.normalizedProduct ?? state.productInput,
+        productDescription: company.productDescription ?? company.products.join(", "),
+        transactionSummary: company.transactionSummary,
+        website: company.website,
+        domain: company.domain,
+        emails: company.emails,
+        phones: company.phone ? [company.phone] : [],
+        whatsappNumbers: company.whatsapp ? [company.whatsapp] : [],
+        linkedin: company.linkedin,
+        facebook: company.facebook,
+        evidenceSummary,
+        contactConfidence: company.contactConfidence
       });
 
       return {
         ...company,
-        buyerFitScore: Math.min(96, 74 + (index % 6) * 4),
-        leadScore: Math.min(98, 70 + (index % 7) * 4),
-        confidence: 0.78 + (index % 4) * 0.04,
-        buyerFitReasons: [
-          "Product catalog overlaps with diaphragm accumulator demand.",
-          "Importer profile suggests recurring industrial replacement-parts purchasing.",
-          `Mock ${providerResult.provider} scoring considered ${company.products.length} product signals.`
-        ],
+        buyerFitTier: score.buyerFit,
+        companyRole: score.companyRole,
+        buyerFitScore: score.leadScore,
+        leadScore: score.leadScore,
+        confidence: score.confidence,
+        suggestedAction: score.suggestedAction,
+        buyerFitReasons: score.reasons,
+        buyerFitRisks: score.risks,
+        status: "scored" as const,
         evidence: [
           ...company.evidence,
           {
-            type: "buyer_fit_mock" as const,
-            title: "Mock Buyer Fit score",
+            type: "buyer_fit" as const,
+            title: `Buyer Fit ${score.buyerFit}`,
             url: company.website,
-            snippet: `Buyer fit scored only from saved evidence and source keyword "${company.sourceKeyword}".`,
-            rawText: evidenceSummary || providerResult.body,
-            confidence: 0.83
+            snippet: score.reasons.join("; "),
+            source: "minimax",
+            rawText: [
+              `buyerFit=${score.buyerFit}`,
+              `companyRole=${score.companyRole}`,
+              `leadScore=${score.leadScore}`,
+              `suggestedAction=${score.suggestedAction}`,
+              `reasons=${score.reasons.join("; ")}`,
+              `risks=${score.risks.join("; ")}`,
+              score.fallbackReason ? `fallback=${score.fallbackReason}` : ""
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            confidence: score.confidence
           }
         ]
       };
     })
   );
+  const scoredCount = companies.filter((company) => company.buyerFitTier).length;
 
   return {
     companies,
-    ...completeNode(state, "scoreBuyerFit", `Scored ${companies.length} mock buyer profiles.`)
+    ...completeNode(state, "scoreBuyerFit", `Scored Buyer Fit for ${scoredCount} companies.`)
   };
 }
