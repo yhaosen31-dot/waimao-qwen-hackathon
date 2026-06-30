@@ -1,8 +1,9 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { resolveLocalDataDir } from "@/lib/data-dir";
 import type { EmailDraft, LeadTask, LocalDatabase, TaskBundle, WorkflowRunResult } from "@/lib/types";
 
-const dataDir = path.join(process.cwd(), "data");
+const dataDir = resolveLocalDataDir();
 const dbPath = path.join(dataDir, "db.json");
 
 function emptyDb(): LocalDatabase {

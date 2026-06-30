@@ -9,6 +9,7 @@ import {
   updateImportJob
 } from "@/repositories/store";
 import { dataStoreStatus } from "@/repositories/storeConfig";
+import { resolveLocalDataDir } from "@/lib/data-dir";
 import {
   getDefaultOrganizationStorageId,
   toStorageSafeFileName,
@@ -24,7 +25,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const uploadsDir = path.join(process.cwd(), "data", "imports");
+const uploadsDir = path.join(resolveLocalDataDir(), "imports");
 
 export async function POST(request: Request) {
   try {

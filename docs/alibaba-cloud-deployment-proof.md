@@ -4,9 +4,10 @@ Use this file as the checklist for the Devpost deployment proof video or screens
 
 ## Deployment Target
 
-Recommended minimum:
+Recommended options:
 
 - Alibaba Cloud ECS or Simple Application Server running the Next.js app.
+- Alibaba Cloud Function Compute Web Function running the standalone Next.js server.
 - Node.js 22 or 24 runtime.
 - Qwen Cloud / DashScope API key configured through environment variables.
 - Optional Redis-compatible service if `QUEUE_ENABLED=true`.
@@ -18,17 +19,22 @@ Use the hosting console secret/environment panel. Do not expose values in the vi
 
 ```env
 NODE_ENV=production
+DATA_STORE_PROVIDER=local
+LOCAL_DATA_DIR=/tmp/waimao-data
 CONTENT_MODEL_PROVIDER=qwen
-QWEN_REAL_MODE=true
+QWEN_REAL_MODE=false
 QWEN_API_KEY=********
 QWEN_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 QWEN_MODEL=qwen-plus
 PRODUCT_SEARCH_CONTENT_MODEL_TOOL_QUERIES=1
+QUEUE_ENABLED=false
 EMAIL_PROVIDER=mock
 EMAIL_SEND_REAL_MODE=false
 ```
 
-If Supabase or Redis is enabled, also configure the matching variables from `.env.production.example`.
+For a real Qwen Cloud proof, set `QWEN_REAL_MODE=true` after adding `QWEN_API_KEY`. Keep `QWEN_REAL_MODE=false` for a mock-safe public demo when no key is configured.
+
+If Supabase or Redis is enabled, also configure the matching variables from `.env.production.example`. For Function Compute demos without external storage, use `.env.alibaba-fc.example`.
 
 ## Build Commands
 
@@ -36,6 +42,18 @@ If Supabase or Redis is enabled, also configure the matching variables from `.en
 npm install
 npm run build
 npm run start
+```
+
+For Function Compute standalone output, build locally and upload the packaged standalone server. Set the web function startup command to:
+
+```bash
+PORT=9000 node server.js
+```
+
+If the platform uses a bootstrap entrypoint instead, use:
+
+```bash
+bash bootstrap
 ```
 
 For a process manager:

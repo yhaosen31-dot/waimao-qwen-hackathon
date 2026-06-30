@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export NODE_ENV="${NODE_ENV:-production}"
+export PORT="${FC_SERVER_PORT:-${PORT:-9000}}"
+
+exec node server.js

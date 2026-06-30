@@ -5,6 +5,7 @@ import {
   leadGenerationStepLabels,
   leadGenerationStepOrder
 } from "@/lib/lead-generation-steps";
+import { resolveLocalDataDir } from "@/lib/data-dir";
 import type {
   CompanyResults,
   Company,
@@ -47,7 +48,7 @@ import type {
   UpdateRunStepInput
 } from "@/types";
 
-const dataDir = path.join(process.cwd(), "data");
+const dataDir = resolveLocalDataDir();
 const storePath = path.join(dataDir, "local-store.json");
 let storeWriteQueue = Promise.resolve();
 
