@@ -101,6 +101,6 @@ Qwen Cloud, Alibaba Cloud, Next.js, React, TypeScript, LangGraph.js, Tailwind CS
 
 ## Repository
 
-Repository URL: `[TODO: add public GitHub repository URL]`
+Repository URL: `https://github.com/yhaosen31-dot/waimao-qwen-hackathon`
 
 License: MIT
