@@ -65,7 +65,7 @@ Deployment proof package:
 
 ## Demo Video
 
-Video URL: `[TODO: upload outputs/waimao-qwen-3min-demo.mp4 to YouTube/Vimeo and paste URL]`
+Video URL: `https://youtu.be/DMCW0-7mMkU`
 
 The video shows a product input, Qwen keyword generation, human keyword approval, LangGraph workflow execution, evidence-backed CRM scoring, Qwen email drafting, and human email review.
 
