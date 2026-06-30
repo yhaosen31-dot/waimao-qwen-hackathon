@@ -1,5 +1,6 @@
 import { completeNode, type LeadCandidate, type LeadGenerationGraphState } from "@/graphs/state";
-import { minimaxProvider, type MinimaxSearchToolOutput } from "@/providers/minimaxProvider";
+import { contentModelProvider } from "@/providers/contentModelProvider";
+import type { MinimaxSearchToolOutput } from "@/providers/minimaxProvider";
 import { updateRun, updateRunStep } from "@/repositories/store";
 import { extractDomain } from "@/services/domainNormalizeService";
 import {
@@ -26,9 +27,17 @@ export async function searchCustomersByProduct(state: LeadGenerationGraphState) 
   const seen = new Set<string>();
   const errors: string[] = [];
   let searchedQueryCount = 0;
-  const minimaxToolUseQueryLimit = Math.max(
+  const contentModelToolUseQueryLimit = Math.max(
     0,
-    Math.min(Number.parseInt(process.env.PRODUCT_SEARCH_MINIMAX_TOOL_QUERIES ?? "1", 10) || 0, 3)
+    Math.min(
+      Number.parseInt(
+        process.env.PRODUCT_SEARCH_CONTENT_MODEL_TOOL_QUERIES ??
+          process.env.PRODUCT_SEARCH_MINIMAX_TOOL_QUERIES ??
+          "1",
+        10
+      ) || 0,
+      3
+    )
   );
 
   for (const query of queryPlan) {
@@ -40,8 +49,8 @@ export async function searchCustomersByProduct(state: LeadGenerationGraphState) 
       candidatesFound: candidates.length
     });
 
-    if (searchedQueryCount <= minimaxToolUseQueryLimit) {
-      const toolSearch = await minimaxProvider.searchWithTools({
+    if (searchedQueryCount <= contentModelToolUseQueryLimit) {
+      const toolSearch = await contentModelProvider.searchWithTools({
         objective:
           "Find real B2B importer, distributor, dealer, trading company, repair/service company, or industrial buyer company candidates for this product. Prefer official company websites and contact/about pages. Avoid marketplaces, directories, and generic product article pages.",
         context: {

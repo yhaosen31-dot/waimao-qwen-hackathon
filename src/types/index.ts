@@ -73,6 +73,7 @@ export type EvidenceProvider =
   | "tavily"
   | "you"
   | "minimax"
+  | "qwen"
   | "manual";
 export type SearchProviderName = "exa" | "tavily" | "you" | "mock";
 export type SearchMode = "economy" | "fallback" | "deep_verify";

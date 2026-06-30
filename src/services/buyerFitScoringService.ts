@@ -5,10 +5,12 @@
   updateCompany,
   updateRunStep
 } from "@/repositories/store";
-import { minimaxProvider } from "@/providers/minimaxProvider";
+import { contentModelProvider } from "@/providers/contentModelProvider";
+import type { ContentModelProviderName } from "@/providers/minimaxProvider";
 import type {
   BuyerFitTier,
   Company,
+  EvidenceProvider,
   Evidence,
   SaveEvidenceInput,
   SuggestedAction
@@ -85,15 +87,17 @@ export async function scoreImportJobBuyerFit(
         evidenceSummary: buildEvidenceSummary(company, companyResults.evidence),
         contactConfidence: company.contactConfidence
       };
-      const score = await minimaxProvider.scoreBuyerFit(scoringInput);
+      const score = await contentModelProvider.scoreBuyerFit(scoringInput);
+      const contentProvider = contentEvidenceProvider(score.provider);
       const buyerFitEvidenceInput: SaveEvidenceInput = {
         companyId: company.id,
-        provider: "minimax",
+        provider: contentProvider,
         type: "buyer_fit",
-        source: "minimax",
-        title: `Buyer Fit: ${score.buyerFit}`,
+        source: contentProvider,
+        title: `Buyer Fit: ${score.buyerFit} via ${score.provider ?? contentModelProvider.name}`,
         url: company.primaryWebsite ?? company.website,
         rawText: [
+          `provider=${score.provider ?? contentModelProvider.name}`,
           `buyerFit=${score.buyerFit}`,
           `companyRole=${score.companyRole}`,
           `leadScore=${score.leadScore}`,
@@ -243,4 +247,9 @@ function incrementBuyerFitStats(
 ) {
   stats[buyerFit] += 1;
   if (suggestedAction === "manual_review") stats.manualReview += 1;
+}
+
+function contentEvidenceProvider(provider: ContentModelProviderName | undefined): EvidenceProvider {
+  if (provider === "qwen" || provider === "minimax") return provider;
+  return "mock";
 }

@@ -311,7 +311,7 @@ async function runProductSearch(payload: LeadJobPayload): Promise<"waiting_revie
       keywordInsights: results.keywords.map((keyword) => ({
         value: keyword.value,
         score: keyword.confidence ?? 0.9,
-        reason: keyword.reason ?? "MiniMax keyword generated for importer discovery."
+        reason: keyword.reason ?? "Content model keyword generated for importer discovery."
       })),
       approvedKeywords
     });

@@ -1,4 +1,4 @@
-import { minimaxProvider } from "@/providers/minimaxProvider";
+import { contentModelProvider } from "@/providers/contentModelProvider";
 import {
   searchProviderRouter,
   type RoutedSearchResult,
@@ -155,7 +155,7 @@ async function runWebsiteSearch(
   input: WebsiteDiscoveryInput,
   queries: string[]
 ): Promise<WebsiteSearchExecution> {
-  const toolSearch = await minimaxProvider.searchWithTools({
+  const toolSearch = await contentModelProvider.searchWithTools({
     objective: "Find the most likely official website for this company. Return evidence only from search_web results.",
     context: {
       companyName: input.companyName,

@@ -22,11 +22,13 @@ export interface MinimaxDraftInput {
   evidenceSummary?: string;
 }
 
+export type ContentModelProviderName = "mock-minimax" | "minimax" | "qwen";
+
 export interface MinimaxDraftOutput {
   subject: string;
   body: string;
   personalizationNotes: string[];
-  provider: "mock-minimax" | "minimax";
+  provider: ContentModelProviderName;
 }
 
 export interface BuyerFitScoreInput {
@@ -56,7 +58,7 @@ export interface BuyerFitScoreOutput {
   reasons: string[];
   risks: string[];
   suggestedAction: SuggestedAction;
-  provider?: "mock-minimax" | "minimax";
+  provider?: ContentModelProviderName;
   fallbackReason?: string;
 }
 
@@ -85,7 +87,7 @@ export interface ColdEmailOutput {
   body: string;
   usedEvidenceIds: string[];
   styleNotes: string[];
-  provider?: "mock-minimax" | "minimax";
+  provider?: ContentModelProviderName;
   fallbackReason?: string;
 }
 
@@ -122,7 +124,7 @@ export interface MinimaxSearchToolCallResult {
 }
 
 export interface MinimaxSearchToolOutput {
-  provider: "mock-minimax" | "minimax";
+  provider: ContentModelProviderName;
   finalText: string;
   toolCalls: MinimaxSearchToolCallResult[];
   fallbackReason?: string;
@@ -137,7 +139,7 @@ export interface ProductNameNormalizeOutput {
   normalizedProduct: string;
   detectedLanguage: "zh" | "en" | "mixed" | "unknown";
   translated: boolean;
-  provider?: "mock-minimax" | "minimax";
+  provider?: ContentModelProviderName;
   fallbackReason?: string;
 }
 

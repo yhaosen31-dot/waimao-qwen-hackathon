@@ -1,5 +1,6 @@
 import { completeNode, type GraphEmailDraft, type LeadGenerationGraphState } from "@/graphs/state";
-import { minimaxProvider } from "@/providers/minimaxProvider";
+import { contentModelProvider } from "@/providers/contentModelProvider";
+import type { ContentModelProviderName } from "@/providers/minimaxProvider";
 
 export async function generateEmailDraft(state: LeadGenerationGraphState) {
   if (state.emailDrafts.length > 0) {
@@ -24,7 +25,7 @@ export async function generateEmailDraft(state: LeadGenerationGraphState) {
         .map((item) => `${item.type}: ${item.rawText ?? item.snippet}`)
         .slice(0, 12)
         .join("\n");
-      const draft = await minimaxProvider.generateColdEmail({
+      const draft = await contentModelProvider.generateColdEmail({
         companyId: company.id,
         companyName: company.name,
         country: company.country,
@@ -57,11 +58,12 @@ export async function generateEmailDraft(state: LeadGenerationGraphState) {
         } satisfies GraphEmailDraft,
         evidence: {
           type: "email_draft" as const,
-          title: "Email draft generation",
+          title: `Email draft generation via ${draft.provider ?? contentModelProvider.name}`,
           url: company.website,
           snippet: `Generated waiting_review email draft for ${toEmail}.`,
-          source: "minimax",
+          source: contentEvidenceSource(draft.provider),
           rawText: [
+            `provider=${draft.provider ?? contentModelProvider.name}`,
             `subject=${draft.subject}`,
             draft.fallbackReason ? `fallback=${draft.fallbackReason}` : ""
           ]
@@ -91,9 +93,14 @@ export async function generateEmailDraft(state: LeadGenerationGraphState) {
     ...completeNode(
       state,
       "generateEmailDraft",
-      `Generated ${emailDrafts.length} evidence-based email drafts via ${minimaxProvider.name}.`
+      `Generated ${emailDrafts.length} evidence-based email drafts via ${contentModelProvider.name}.`
     )
   };
+}
+
+function contentEvidenceSource(provider: ContentModelProviderName | undefined) {
+  if (provider === "qwen" || provider === "minimax") return provider;
+  return "mock";
 }
 
 function isEligibleForEmail(company: LeadGenerationGraphState["companies"][number]) {

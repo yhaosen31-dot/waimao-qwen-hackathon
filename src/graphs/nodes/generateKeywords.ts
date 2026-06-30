@@ -1,5 +1,5 @@
 import { completeNode, type LeadGenerationGraphState } from "@/graphs/state";
-import { minimaxProvider } from "@/providers/minimaxProvider";
+import { contentModelProvider } from "@/providers/contentModelProvider";
 
 export async function generateKeywords(state: LeadGenerationGraphState) {
   if (state.keywords.length > 0) {
@@ -15,7 +15,7 @@ export async function generateKeywords(state: LeadGenerationGraphState) {
   }
 
   const productName = state.normalizedProduct ?? state.productInput;
-  const generated = await minimaxProvider.generateProductKeywords({
+  const generated = await contentModelProvider.generateProductKeywords({
     productInput: productName,
     targetCount: state.targetCount,
     targetCountries: state.targetCountries,
@@ -34,7 +34,7 @@ export async function generateKeywords(state: LeadGenerationGraphState) {
     ...completeNode(
       state,
       "generateKeywords",
-      `Generated ${keywords.length} product-specific keywords via MiniMax keyword service.`
+      `Generated ${keywords.length} product-specific keywords via ${contentModelProvider.name}.`
     )
   };
 }

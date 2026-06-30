@@ -2,7 +2,8 @@
   "name": "waimao-agent-platform",
   "version": "0.1.0",
   "private": true,
-  "description": "Mock-first B2B export lead generation agent platform built with Next.js and LangGraph.js.",
+  "description": "Qwen Cloud powered B2B export lead generation autopilot agent built with Next.js and LangGraph.js.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "next dev",

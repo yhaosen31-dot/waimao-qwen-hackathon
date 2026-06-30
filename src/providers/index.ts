@@ -1,5 +1,7 @@
 export * from "@/providers/types";
 export * from "@/providers/minimaxProvider";
+export * from "@/providers/qwenProvider";
+export * from "@/providers/contentModelProvider";
 export * from "@/providers/exaProvider";
 export * from "@/providers/tavilyProvider";
 export * from "@/providers/youProvider";

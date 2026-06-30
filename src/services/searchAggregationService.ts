@@ -1,5 +1,5 @@
 import type { CompanyContactSearchInput, CompanyWebsiteSearchInput } from "@/providers/exaProvider";
-import { minimaxProvider } from "@/providers/minimaxProvider";
+import { contentModelProvider } from "@/providers/contentModelProvider";
 import { searchProviderRouter } from "@/services/searchProviderRouter";
 import { discoverPublicWebsiteWhatsapps } from "@/services/whatsappDiscoveryService";
 import type { ContactSearchResult, SearchResult } from "@/types";
@@ -148,7 +148,7 @@ export const searchAggregationService = {
 
 async function runWebsiteSearch(input: CompanyWebsiteSearchInput) {
   const fallbackQuery = `${input.companyName} official website ${input.country ?? ""} ${input.sourceKeyword ?? ""}`.trim();
-  const toolSearch = await minimaxProvider.searchWithTools({
+  const toolSearch = await contentModelProvider.searchWithTools({
     objective: "Find official website candidates for this company/product-search lead.",
     context: {
       companyName: input.companyName,
@@ -201,7 +201,7 @@ function contactEvidenceType(type: ContactSearchResult["type"]) {
 }
 
 async function runContactSearch(input: CompanyContactSearchInput) {
-  const toolSearch = await minimaxProvider.searchWithTools({
+  const toolSearch = await contentModelProvider.searchWithTools({
     objective: "Find public contact evidence for this company: email, phone, WhatsApp, LinkedIn, and Facebook.",
     context: {
       companyName: input.companyName,

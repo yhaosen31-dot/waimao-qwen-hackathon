@@ -10,8 +10,16 @@ import {
   updateRun,
   updateRunStep
 } from "@/repositories/store";
-import { minimaxProvider } from "@/providers/minimaxProvider";
-import type { Company, EmailAddress, EmailDraft, Evidence, SaveEmailDraftInput } from "@/types";
+import { contentModelProvider } from "@/providers/contentModelProvider";
+import type { ContentModelProviderName } from "@/providers/minimaxProvider";
+import type {
+  Company,
+  EmailAddress,
+  EmailDraft,
+  Evidence,
+  EvidenceProvider,
+  SaveEmailDraftInput
+} from "@/types";
 
 export interface EmailDraftGenerationStats {
   importJobId: string;
@@ -241,7 +249,7 @@ async function buildDraftInput(input: {
     .filter(Boolean)
     .slice(0, 12)
     .join("\n");
-  const generated = await minimaxProvider.generateColdEmail({
+  const generated = await contentModelProvider.generateColdEmail({
     companyId: input.company.id,
     companyName: input.company.name,
     country: input.company.country,
@@ -266,11 +274,12 @@ async function buildDraftInput(input: {
   const [draftEvidence] = await saveEvidence(input.company.runId, [
     {
       companyId: input.company.id,
-      provider: "minimax",
+      provider: contentEvidenceProvider(generated.provider),
       type: "email_draft",
-      source: "minimax",
-      title: `Email draft for ${input.company.name}`,
+      source: contentEvidenceProvider(generated.provider),
+      title: `Email draft for ${input.company.name} via ${generated.provider ?? contentModelProvider.name}`,
       rawText: [
+        `provider=${generated.provider ?? contentModelProvider.name}`,
         `subject=${generated.subject}`,
         generated.body,
         generated.fallbackReason ? `fallback=${generated.fallbackReason}` : ""
@@ -377,4 +386,9 @@ async function markRunWaitingForEmailReview(runId: string, summary: string) {
 function stableDraftId(companyId: string, toEmail: string) {
   const hash = createHash("sha1").update(`${companyId}:${toEmail}`).digest("hex").slice(0, 12);
   return `email_draft_${hash}`;
+}
+
+function contentEvidenceProvider(provider: ContentModelProviderName | undefined): EvidenceProvider {
+  if (provider === "qwen" || provider === "minimax") return provider;
+  return "mock";
 }

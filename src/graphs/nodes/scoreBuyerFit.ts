@@ -1,5 +1,6 @@
 import { completeNode, type LeadGenerationGraphState } from "@/graphs/state";
-import { minimaxProvider } from "@/providers/minimaxProvider";
+import { contentModelProvider } from "@/providers/contentModelProvider";
+import type { ContentModelProviderName } from "@/providers/minimaxProvider";
 
 export async function scoreBuyerFit(state: LeadGenerationGraphState) {
   const companies = await Promise.all(
@@ -17,7 +18,7 @@ export async function scoreBuyerFit(state: LeadGenerationGraphState) {
           .map((item) => `${item.type}: ${item.rawText ?? item.snippet}`)
           .slice(0, 12)
           .join("\n");
-      const score = await minimaxProvider.scoreBuyerFit({
+      const score = await contentModelProvider.scoreBuyerFit({
         companyId: company.id,
         companyName: company.name,
         country: company.country,
@@ -51,11 +52,12 @@ export async function scoreBuyerFit(state: LeadGenerationGraphState) {
           ...company.evidence,
           {
             type: "buyer_fit" as const,
-            title: `Buyer Fit ${score.buyerFit}`,
+            title: `Buyer Fit ${score.buyerFit} via ${score.provider ?? contentModelProvider.name}`,
             url: company.website,
             snippet: score.reasons.join("; "),
-            source: "minimax",
+            source: contentEvidenceSource(score.provider),
             rawText: [
+              `provider=${score.provider ?? contentModelProvider.name}`,
               `buyerFit=${score.buyerFit}`,
               `companyRole=${score.companyRole}`,
               `leadScore=${score.leadScore}`,
@@ -76,6 +78,15 @@ export async function scoreBuyerFit(state: LeadGenerationGraphState) {
 
   return {
     companies,
-    ...completeNode(state, "scoreBuyerFit", `Scored Buyer Fit for ${scoredCount} companies.`)
+    ...completeNode(
+      state,
+      "scoreBuyerFit",
+      `Scored Buyer Fit for ${scoredCount} companies via ${contentModelProvider.name}.`
+    )
   };
+}
+
+function contentEvidenceSource(provider: ContentModelProviderName | undefined) {
+  if (provider === "qwen" || provider === "minimax") return provider;
+  return "mock";
 }

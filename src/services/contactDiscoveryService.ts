@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { minimaxProvider } from "@/providers/minimaxProvider";
+import { contentModelProvider } from "@/providers/contentModelProvider";
 import { searchProviderRouter, type SearchProviderAttempt } from "@/services/searchProviderRouter";
 import { discoverPublicWebsiteWhatsapps } from "@/services/whatsappDiscoveryService";
 import {
@@ -259,7 +259,7 @@ export async function discoverCompanyContacts(
 async function runContactSearch(input: ContactDiscoveryInput, contactQuery: string) {
   const contactResults: ContactSearchResult[] = [];
   const providerAttempts: SearchProviderAttempt[] = [];
-  const toolSearch = await minimaxProvider.searchWithTools({
+  const toolSearch = await contentModelProvider.searchWithTools({
     objective:
       "Find public email, phone, WhatsApp, LinkedIn, and Facebook evidence for this company. Return only evidence from search_web results.",
     context: {

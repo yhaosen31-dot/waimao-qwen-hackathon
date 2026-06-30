@@ -7,6 +7,7 @@ export const sourceLabels: Record<string, string> = {
   tavily: "Tavily",
   you: "YOU",
   minimax: "MiniMax",
+  qwen: "Qwen Cloud",
   uploaded_excel: "上传表格"
 };
 

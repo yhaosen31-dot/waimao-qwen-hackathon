@@ -53,7 +53,7 @@ export async function saveToCrm(state: LeadGenerationGraphState) {
           ? ("approved" as const)
           : ("rejected" as const),
         confidence: insight?.score ?? 0.9,
-        reason: insight?.reason ?? "MiniMax keyword generated for importer discovery.",
+        reason: insight?.reason ?? "Content model keyword generated for importer discovery.",
         evidenceIds: []
       };
     })
@@ -258,7 +258,9 @@ function sourceForGraphCompany(company: GraphCompany | undefined): EvidenceProvi
 }
 
 function providerFromGraphEvidence(item: GraphCompany["evidence"][number]): EvidenceProvider {
-  if (item.type === "buyer_fit") return "minimax";
+  if (item.type === "buyer_fit" || item.type === "email_draft") {
+    return providerFromSource(item.source) ?? "minimax";
+  }
   return providerFromSource(item.source) ?? (item.type === "product_search" ? "product_search" : "manual");
 }
 
@@ -273,6 +275,7 @@ function providerFromSource(value: string | undefined): EvidenceProvider {
     value === "tavily" ||
     value === "you" ||
     value === "minimax" ||
+    value === "qwen" ||
     value === "manual" ||
     value === "mock"
   ) {

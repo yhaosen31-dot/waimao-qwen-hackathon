@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100" role="img" aria-labelledby="title desc">
+  <title id="title">Waimao Agent Platform architecture</title>
+  <desc id="desc">Dark technical architecture diagram for a Qwen Cloud powered B2B export sales autopilot agent.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#070B10"/>
+      <stop offset="55%" stop-color="#0B1118"/>
+      <stop offset="100%" stop-color="#07090D"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F3C96A"/>
+      <stop offset="100%" stop-color="#B9892F"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#58F0D2"/>
+      <stop offset="100%" stop-color="#1D9F8D"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto">
+      <path d="M2,2 L12,7 L2,12 Z" fill="#58F0D2"/>
+    </marker>
+    <marker id="arrowGold" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto">
+      <path d="M2,2 L12,7 L2,12 Z" fill="#D6A94A"/>
+    </marker>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#16202B" stroke-width="1"/>
+    </pattern>
+    <style>
+      .title { font-family: Arial, sans-serif; font-size: 54px; font-weight: 800; fill: #F5F7FA; letter-spacing: 0; }
+      .subtitle { font-family: Arial, sans-serif; font-size: 22px; fill: #95A3B4; letter-spacing: 0; }
+      .label { font-family: Arial, sans-serif; font-size: 25px; font-weight: 800; fill: #F5F7FA; letter-spacing: 0; }
+      .small { font-family: Arial, sans-serif; font-size: 17px; fill: #B7C4D4; letter-spacing: 0; }
+      .tiny { font-family: Arial, sans-serif; font-size: 15px; fill: #7F8FA3; letter-spacing: 0; }
+      .mono { font-family: Consolas, monospace; font-size: 15px; fill: #9AEFE0; letter-spacing: 0; }
+      .box { fill: #101821; stroke: #263241; stroke-width: 2; rx: 12; }
+      .box2 { fill: #0D141C; stroke: #2D3B4D; stroke-width: 2; rx: 12; }
+      .qwen { fill: #171612; stroke: #D6A94A; stroke-width: 2; rx: 12; }
+      .gate { fill: #12191D; stroke: #58F0D2; stroke-width: 2.5; rx: 12; }
+      .cloud { fill: #0F151F; stroke: #4A5B73; stroke-width: 2; rx: 20; stroke-dasharray: 8 7; }
+      .line { fill: none; stroke: #58F0D2; stroke-width: 3; marker-end: url(#arrow); }
+      .lineGold { fill: none; stroke: #D6A94A; stroke-width: 3; marker-end: url(#arrowGold); }
+      .lineSoft { fill: none; stroke: #415266; stroke-width: 2; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1100" fill="url(#bg)"/>
+  <rect width="1600" height="1100" fill="url(#grid)" opacity="0.45"/>
+  <circle cx="1260" cy="190" r="260" fill="#17352F" opacity="0.28" filter="url(#glow)"/>
+  <circle cx="310" cy="870" r="230" fill="#3B2D13" opacity="0.18" filter="url(#glow)"/>
+
+  <text x="70" y="92" class="title">Waimao Agent Platform</text>
+  <text x="72" y="130" class="subtitle">Qwen Cloud powered autopilot agent for reviewed B2B export lead generation</text>
+  <text x="1280" y="88" class="mono">Track 4: Autopilot Agent</text>
+
+  <rect x="52" y="190" width="255" height="128" class="box"/>
+  <text x="82" y="238" class="label">Sales Operator</text>
+  <text x="82" y="270" class="small">Product input</text>
+  <text x="82" y="297" class="small">Target markets</text>
+
+  <rect x="383" y="172" width="285" height="164" class="box"/>
+  <text x="415" y="222" class="label">Next.js App</text>
+  <text x="415" y="254" class="small">Tasks, runs, reviews</text>
+  <text x="415" y="281" class="small">CRM and draft screens</text>
+  <text x="415" y="308" class="mono">src/app</text>
+
+  <rect x="745" y="172" width="310" height="164" class="box2"/>
+  <text x="777" y="222" class="label">API Layer</text>
+  <text x="777" y="254" class="small">Run control and review routes</text>
+  <text x="777" y="281" class="small">Auth, rate limits, audit logs</text>
+  <text x="777" y="308" class="mono">src/app/api</text>
+
+  <rect x="470" y="430" width="615" height="238" class="box"/>
+  <text x="510" y="486" class="label">LangGraph Autopilot Workflow</text>
+  <text x="510" y="524" class="small">normalize -> keywords -> search -> enrich -> score -> draft -> review</text>
+  <text x="510" y="560" class="mono">src/graphs/leadGenerationGraph.ts</text>
+  <rect x="510" y="594" width="105" height="42" fill="#121D27" stroke="#31465C" rx="8"/>
+  <text x="529" y="621" class="tiny">Normalize</text>
+  <rect x="635" y="594" width="105" height="42" fill="#121D27" stroke="#31465C" rx="8"/>
+  <text x="661" y="621" class="tiny">Search</text>
+  <rect x="760" y="594" width="105" height="42" fill="#121D27" stroke="#31465C" rx="8"/>
+  <text x="782" y="621" class="tiny">Evidence</text>
+  <rect x="885" y="594" width="105" height="42" fill="#121D27" stroke="#31465C" rx="8"/>
+  <text x="916" y="621" class="tiny">Score</text>
+  <rect x="1010" y="594" width="46" height="42" fill="url(#teal)" opacity="0.9" rx="8"/>
+
+  <rect x="1168" y="162" width="350" height="190" class="qwen"/>
+  <text x="1204" y="216" class="label">Qwen Cloud</text>
+  <text x="1204" y="252" class="small">DashScope compatible API</text>
+  <text x="1204" y="282" class="small">JSON reasoning and tool planning</text>
+  <text x="1204" y="314" class="mono">qwen-plus</text>
+
+  <rect x="1150" y="442" width="368" height="190" class="box2"/>
+  <text x="1186" y="496" class="label">Tool Router</text>
+  <text x="1186" y="532" class="small">Search providers and mock mode</text>
+  <text x="1186" y="562" class="small">EXA, Tavily, YOU, website/contact tools</text>
+  <text x="1186" y="594" class="mono">src/services/searchProviderRouter.ts</text>
+
+  <rect x="70" y="442" width="315" height="122" class="gate"/>
+  <text x="102" y="490" class="label">Human Gate 1</text>
+  <text x="102" y="524" class="small">Approve useful keywords</text>
+  <text x="102" y="550" class="tiny">Blocks noisy search terms</text>
+
+  <rect x="70" y="635" width="315" height="122" class="gate"/>
+  <text x="102" y="683" class="label">Human Gate 2</text>
+  <text x="102" y="717" class="small">Approve, save, or skip draft</text>
+  <text x="102" y="743" class="tiny">No auto-send by default</text>
+
+  <rect x="470" y="790" width="310" height="160" class="box"/>
+  <text x="506" y="842" class="label">CRM + Evidence</text>
+  <text x="506" y="878" class="small">Companies, scores, risks</text>
+  <text x="506" y="908" class="small">Source-backed review state</text>
+
+  <rect x="830" y="790" width="285" height="160" class="box"/>
+  <text x="866" y="842" class="label">Email Provider</text>
+  <text x="866" y="878" class="small">Resend or SMTP ready</text>
+  <text x="866" y="908" class="tiny">Disabled until approval rules pass</text>
+
+  <rect x="1172" y="770" width="346" height="198" class="cloud"/>
+  <text x="1206" y="824" class="label">Alibaba Cloud Runtime</text>
+  <text x="1206" y="860" class="small">ECS or Simple Application Server</text>
+  <text x="1206" y="890" class="small">Node.js app, worker, logs</text>
+  <text x="1206" y="920" class="small">Redis-compatible queue optional</text>
+
+  <path d="M307 254 C335 254 350 254 383 254" class="line"/>
+  <path d="M668 254 C700 254 715 254 745 254" class="line"/>
+  <path d="M900 336 C900 372 880 395 832 430" class="line"/>
+  <path d="M1085 492 C1115 492 1125 492 1150 492" class="lineSoft"/>
+  <path d="M1085 520 C1122 420 1145 326 1168 278" class="lineGold"/>
+  <path d="M470 532 C430 532 415 512 385 504" class="line"/>
+  <path d="M227 564 C270 620 340 650 470 650" class="line"/>
+  <path d="M470 702 C360 710 310 704 385 696" class="line"/>
+  <path d="M777 668 C735 720 686 760 625 790" class="line"/>
+  <path d="M912 668 C946 715 962 750 972 790" class="lineSoft"/>
+  <path d="M1115 866 C1138 866 1152 866 1172 866" class="lineSoft"/>
+  <path d="M1345 770 C1272 676 1198 620 1085 590" class="lineSoft"/>
+  <path d="M1345 770 C1240 625 1180 390 1343 352" class="lineGold"/>
+
+  <rect x="70" y="1000" width="1450" height="48" fill="#0B1118" stroke="#243141" rx="10"/>
+  <text x="96" y="1031" class="small">Review-first automation: Qwen handles reasoning and drafting; the application controls tools, storage, auditability, and human approval.</text>
+</svg>
