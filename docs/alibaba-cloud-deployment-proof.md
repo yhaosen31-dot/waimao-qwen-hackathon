@@ -6,12 +6,23 @@ Use this file as the checklist for the Devpost deployment proof video or screens
 
 Recommended options:
 
-- Alibaba Cloud ECS or Simple Application Server running the Next.js app.
 - Alibaba Cloud Function Compute Web Function running the standalone Next.js server.
-- Node.js 22 or 24 runtime.
+- Node.js 20, 22, or 24 custom runtime.
 - Qwen Cloud / DashScope API key configured through environment variables.
 - Optional Redis-compatible service if `QUEUE_ENABLED=true`.
 - Optional Supabase or local JSON storage for demo data.
+
+Verified hackathon deployment:
+
+- Platform: Alibaba Cloud Function Compute Web Function.
+- Region: `cn-hangzhou`.
+- Function: `waimao-qwen-agent`.
+- Runtime: custom runtime `Node.js 20` on Debian 10.
+- Startup command: `bash bootstrap`.
+- Listening port: `9000`.
+- HTTP trigger: `defaultTrigger`, anonymous demo access enabled.
+- Public app URL: `https://waimao-en-agent-wioggngoxg.cn-hangzhou.fcapp.run/runs/new`.
+- Verification: `GET /runs/new` returned HTTP `200` with page title `Waimao Agent Platform`.
 
 ## Required Environment Variables
 
@@ -65,10 +76,10 @@ pm2 logs waimao-agent-platform
 
 ## Proof Video Shot List
 
-1. Show the Alibaba Cloud console with the ECS or Simple Application Server instance name.
-2. Show the public IP/domain or application endpoint.
+1. Show the Alibaba Cloud Function Compute console with function `waimao-qwen-agent`.
+2. Show the public Function Compute endpoint.
 3. Show the environment variable names, with secret values hidden.
-4. Show the terminal or cloud logs running `npm run start` or the PM2 process.
+4. Show the runtime as Node.js 20, startup command `bash bootstrap`, and port `9000`.
 5. Open the deployed app URL.
 6. Start or open a run for a product such as `diaphragm accumulator`.
 7. Show keyword review, with provider/status indicating Qwen-backed reasoning where available.
@@ -81,7 +92,8 @@ Attach or link:
 
 - Public repository URL.
 - Public or unlisted 3-minute demo video URL.
-- Alibaba Cloud proof video or screenshots.
+- Alibaba Cloud Function Compute proof video or screenshots.
+- Public app URL: `https://waimao-en-agent-wioggngoxg.cn-hangzhou.fcapp.run/runs/new`.
 - `docs/architecture.svg`.
 - `docs/devpost-submission.md` text.
 

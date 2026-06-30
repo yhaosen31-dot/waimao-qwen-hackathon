@@ -167,14 +167,18 @@ npm run worker
 
 ## Alibaba Cloud Deployment Proof
 
-For Devpost, deploy this hackathon build on Alibaba Cloud ECS or Simple Application Server and use Qwen Cloud for the model provider.
+For Devpost, this hackathon build is deployed on Alibaba Cloud Function Compute as a Web Function and uses Qwen Cloud as the model provider integration.
+
+Verified public demo URL:
+
+`https://waimao-en-agent-wioggngoxg.cn-hangzhou.fcapp.run/runs/new`
 
 Recommended proof assets:
 
 - Public app URL.
-- Screenshot or short clip of the Alibaba Cloud instance/application.
+- Screenshot or short clip of the Alibaba Cloud Function Compute function.
 - Screenshot or clip showing the environment variables without exposing secrets.
-- Server log showing the app running.
+- Runtime/config screen showing Node.js 20, `bash bootstrap`, and port `9000`.
 - App screen showing a workflow run with provider `qwen`.
 - This repository link, architecture diagram, and the 3-minute demo video link.
 

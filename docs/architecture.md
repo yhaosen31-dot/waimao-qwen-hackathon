@@ -31,7 +31,7 @@ flowchart TB
   Email -. "disabled until approved" .-> Store
 
   subgraph Alibaba["Alibaba Cloud deployment proof"]
-    Runtime["ECS or Simple Application Server"]
+    Runtime["Function Compute Web Function"]
     Redis["Redis-compatible queue backend"]
     Logs["Runtime logs"]
   end

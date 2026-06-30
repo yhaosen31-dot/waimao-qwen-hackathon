@@ -53,12 +53,12 @@ This makes the workflow practical for business use because the agent automates t
 
 ## Alibaba Cloud Deployment
 
-For the hackathon proof, the application is designed to run on Alibaba Cloud ECS or Simple Application Server with Qwen Cloud configured through environment variables.
+For the hackathon proof, the application is deployed on Alibaba Cloud Function Compute as a Web Function running the standalone Next.js server. The function uses the Node.js 20 custom runtime, the startup command `bash bootstrap`, and port `9000`.
 
 Deployment proof package:
 
-- Public app URL: `[TODO: add deployed URL]`
-- Alibaba Cloud proof video or screenshots: `[TODO: add link]`
+- Public app URL: `https://waimao-en-agent-wioggngoxg.cn-hangzhou.fcapp.run/runs/new`
+- Alibaba Cloud proof: Function Compute Web Function `waimao-qwen-agent` in `cn-hangzhou`, public HTTP trigger, anonymous demo access enabled.
 - Qwen Cloud model provider: `qwen-plus`
 - API base URL: `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
 - Architecture diagram: `docs/architecture.svg`

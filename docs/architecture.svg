@@ -123,7 +123,7 @@
 
   <rect x="1172" y="770" width="346" height="198" class="cloud"/>
   <text x="1206" y="824" class="label">Alibaba Cloud Runtime</text>
-  <text x="1206" y="860" class="small">ECS or Simple Application Server</text>
+  <text x="1206" y="860" class="small">Function Compute Web Function</text>
   <text x="1206" y="890" class="small">Node.js app, worker, logs</text>
   <text x="1206" y="920" class="small">Redis-compatible queue optional</text>
 
